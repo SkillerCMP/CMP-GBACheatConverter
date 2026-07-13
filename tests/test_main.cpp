@@ -1,0 +1,158 @@
+#include "test_cases.hpp"
+#include "test_support.hpp"
+
+namespace {
+
+int run_tests() {
+    using namespace gba::tests;
+
+    static const TestCase tests[] = {
+        {"test_release_version", &test_release_version},
+        {"test_embedded_cli_runner", &test_embedded_cli_runner},
+        {"test_utf8_bom_cleanup", &test_utf8_bom_cleanup},
+        {"test_plain_cheat_name_preservation", &test_plain_cheat_name_preservation},
+        {"test_release_direct_write_matrix", &test_release_direct_write_matrix},
+        {"test_codebreaker_cipher_roundtrip", &test_codebreaker_cipher_roundtrip},
+        {"test_fcd_input_seed_helpers", &test_fcd_input_seed_helpers},
+        {"test_fcd_keyless_encrypted_input_seed", &test_fcd_keyless_encrypted_input_seed},
+        {"test_fcd_manual_key_for_leading_9_payload", &test_fcd_manual_key_for_leading_9_payload},
+        {"test_fcd_embedded_seed_overrides_manual_seed", &test_fcd_embedded_seed_overrides_manual_seed},
+        {"test_tea_roundtrip", &test_tea_roundtrip},
+        {"test_direct_write_merge", &test_direct_write_merge},
+        {"test_condition", &test_condition},
+        {"test_fix8_multi_if", &test_fix8_multi_if},
+        {"test_encrypted_stream_type9_collision", &test_encrypted_stream_type9_collision},
+        {"test_encrypted_stream_to_ez", &test_encrypted_stream_to_ez},
+        {"test_optional_split_mode", &test_optional_split_mode},
+        {"test_codebreaker_to_gameshark_raw", &test_codebreaker_to_gameshark_raw},
+        {"test_gameshark_32bit_to_codebreaker", &test_gameshark_32bit_to_codebreaker},
+        {"test_gameshark_condition_to_ez", &test_gameshark_condition_to_ez},
+        {"test_gameshark_encrypted_roundtrip", &test_gameshark_encrypted_roundtrip},
+        {"test_armax_encrypted_vector_decrypt", &test_armax_encrypted_vector_decrypt},
+        {"test_armax_static_roundtrip", &test_armax_static_roundtrip},
+        {"test_armax_write_to_ez", &test_armax_write_to_ez},
+        {"test_armax_next_two_condition_to_ez", &test_armax_next_two_condition_to_ez},
+        {"test_codebreaker_to_armax_raw", &test_codebreaker_to_armax_raw},
+        {"test_xploder_raw_to_ez", &test_xploder_raw_to_ez},
+        {"test_ezflash_original_on_only", &test_ezflash_original_on_only},
+        {"test_auto_detect_ezflash", &test_auto_detect_ezflash},
+        {"test_auto_detect_fcd_raw_and_encrypted", &test_auto_detect_fcd_raw_and_encrypted},
+        {"test_auto_detect_gameshark_raw_and_encrypted", &test_auto_detect_gameshark_raw_and_encrypted},
+        {"test_auto_detect_armax_raw_and_encrypted", &test_auto_detect_armax_raw_and_encrypted},
+        {"test_auto_detect_rejects_non_code_text", &test_auto_detect_rejects_non_code_text},
+        {"test_ezflash_parse_original_to_codebreaker", &test_ezflash_parse_original_to_codebreaker},
+        {"test_ezflash_parse_cheat_mod_roundtrip", &test_ezflash_parse_cheat_mod_roundtrip},
+        {"test_xploder_encrypted_roundtrip", &test_xploder_encrypted_roundtrip},
+        {"test_codebreaker_to_xploder_raw", &test_codebreaker_to_xploder_raw},
+        {"test_codebreaker_condition_to_gameshark", &test_codebreaker_condition_to_gameshark},
+        {"test_gameshark_deadface_key_derivation", &test_gameshark_deadface_key_derivation},
+        {"test_gameshark_dynamic_deadface_roundtrip", &test_gameshark_dynamic_deadface_roundtrip},
+        {"test_inline_notes_inside_entry", &test_inline_notes_inside_entry},
+        {"test_inline_notes_for_empty_entry", &test_inline_notes_for_empty_entry},
+        {"test_inline_notes_ez_comment_style", &test_inline_notes_ez_comment_style},
+        {"test_codebreaker_slide_parse_and_compact_export", &test_codebreaker_slide_parse_and_compact_export},
+        {"test_codebreaker_slide_to_ez", &test_codebreaker_slide_to_ez},
+        {"test_codebreaker_packed_list_parse_and_export", &test_codebreaker_packed_list_parse_and_export},
+        {"test_codebreaker_packed_list_to_ez", &test_codebreaker_packed_list_to_ez},
+        {"test_codebreaker_multiline_continuation_type9_collision", &test_codebreaker_multiline_continuation_type9_collision},
+        {"test_fcd_multiline_encrypted_roundtrip", &test_fcd_multiline_encrypted_roundtrip},
+        {"test_fcd_condition_variants_roundtrip", &test_fcd_condition_variants_roundtrip},
+        {"test_fcd_button_activator_encrypted_roundtrip", &test_fcd_button_activator_encrypted_roundtrip},
+        {"test_fcd_button_activator_does_not_leak", &test_fcd_button_activator_does_not_leak},
+        {"test_fcd_conditioned_slide_roundtrip", &test_fcd_conditioned_slide_roundtrip},
+        {"test_fcd_conditioned_packed_list_scope", &test_fcd_conditioned_packed_list_scope},
+        {"test_fcd_conditioned_short_packed_list_scope", &test_fcd_conditioned_short_packed_list_scope},
+        {"test_fcd_master_and_logical_roundtrip", &test_fcd_master_and_logical_roundtrip},
+        {"test_fcd_hook_cross_family_conversion", &test_fcd_hook_cross_family_conversion},
+        {"test_master_hook_safety_no_leak", &test_master_hook_safety_no_leak},
+        {"test_gameshark_armax_master_id_roundtrip", &test_gameshark_armax_master_id_roundtrip},
+        {"test_fcd_logical_cross_family_behavior", &test_fcd_logical_cross_family_behavior},
+        {"test_newline_cleanup", &test_newline_cleanup},
+        {"test_compact_code_line_auto_format", &test_compact_code_line_auto_format},
+        {"test_flattened_code_stream_cleanup", &test_flattened_code_stream_cleanup},
+        {"test_codetwink_attached_code_cleanup", &test_codetwink_attached_code_cleanup},
+        {"test_gamehacking_org_cleanup", &test_gamehacking_org_cleanup},
+        {"test_gamehacking_org_multiple_blocks", &test_gamehacking_org_multiple_blocks},
+        {"test_gamehacking_org_gameshark_advance_alias", &test_gamehacking_org_gameshark_advance_alias},
+        {"test_inline_metadata_heading_roundtrip", &test_inline_metadata_heading_roundtrip},
+        {"test_gameshark_device_button_roundtrip", &test_gameshark_device_button_roundtrip},
+        {"test_gameshark_device_button_encrypted_roundtrip", &test_gameshark_device_button_encrypted_roundtrip},
+        {"test_gameshark_device_button_does_not_leak", &test_gameshark_device_button_does_not_leak},
+        {"test_gameshark_condition_variants_roundtrip", &test_gameshark_condition_variants_roundtrip},
+        {"test_gameshark_inclusive_conditions_do_not_leak", &test_gameshark_inclusive_conditions_do_not_leak},
+        {"test_auto_detect_gameshark_device_button", &test_auto_detect_gameshark_device_button},
+        {"test_gameshark_rom_patch_roundtrip", &test_gameshark_rom_patch_roundtrip},
+        {"test_gameshark_rom_patch_dependency_safety", &test_gameshark_rom_patch_dependency_safety},
+        {"test_gameshark_slowdown_roundtrip_and_safety", &test_gameshark_slowdown_roundtrip_and_safety},
+        {"test_auto_detect_gameshark_rom_patch_and_slowdown", &test_auto_detect_gameshark_rom_patch_and_slowdown},
+        {"test_gameshark_noncanonical_patch_is_not_ram_write", &test_gameshark_noncanonical_patch_is_not_ram_write},
+        {"test_gameshark_assignment_list_roundtrip", &test_gameshark_assignment_list_roundtrip},
+        {"test_gameshark_assignment_list_encrypted_roundtrip", &test_gameshark_assignment_list_encrypted_roundtrip},
+        {"test_gameshark_assignment_list_cross_family_expansion", &test_gameshark_assignment_list_cross_family_expansion},
+        {"test_gameshark_multiline_condition_roundtrip", &test_gameshark_multiline_condition_roundtrip},
+        {"test_gameshark_type3_arithmetic_roundtrip", &test_gameshark_type3_arithmetic_roundtrip},
+        {"test_gameshark_multiline_condition_subtypes", &test_gameshark_multiline_condition_subtypes},
+        {"test_fcd_unsigned_comparison_to_armax", &test_fcd_unsigned_comparison_to_armax},
+        {"test_armax_signed_comparison_does_not_leak_to_fcd", &test_armax_signed_comparison_does_not_leak_to_fcd},
+        {"test_auto_detect_gameshark_assignment_list", &test_auto_detect_gameshark_assignment_list},
+        {"test_gamehacking_org_legacy_separator_removal", &test_gamehacking_org_legacy_separator_removal},
+        {"test_armax_deadface_key_derivation", &test_armax_deadface_key_derivation},
+        {"test_armax_dynamic_deadface_roundtrip", &test_armax_dynamic_deadface_roundtrip},
+        {"test_armax_pointer_roundtrip", &test_armax_pointer_roundtrip},
+        {"test_armax_pointer_cross_family_safety", &test_armax_pointer_cross_family_safety},
+        {"test_auto_detect_armax_dynamic_and_pointer", &test_auto_detect_armax_dynamic_and_pointer},
+        {"test_armax_deadface_across_entries", &test_armax_deadface_across_entries},
+        {"test_armax_special_mask_rejects_reserved_aliases", &test_armax_special_mask_rejects_reserved_aliases},
+        {"test_armax_patch_and_slowdown_roundtrip", &test_armax_patch_and_slowdown_roundtrip},
+        {"test_armax_foreign_seed_is_not_emitted", &test_armax_foreign_seed_is_not_emitted},
+        {"test_armax_block_if_else_roundtrip", &test_armax_block_if_else_roundtrip},
+        {"test_armax_empty_else_roundtrip", &test_armax_empty_else_roundtrip},
+        {"test_armax_block_else_cross_family_safety", &test_armax_block_else_cross_family_safety},
+        {"test_armax_block_without_else_to_ez", &test_armax_block_without_else_to_ez},
+        {"test_armax_button_operations_roundtrip", &test_armax_button_operations_roundtrip},
+        {"test_auto_detect_armax_block_and_button", &test_auto_detect_armax_block_and_button},
+        {"test_armax_unterminated_block_is_safe", &test_armax_unterminated_block_is_safe},
+        {"test_ezflash_grouped_condition_to_fcd_repeats_condition", &test_ezflash_grouped_condition_to_fcd_repeats_condition},
+        {"test_ezflash_fix8_compound_condition_roundtrip", &test_ezflash_fix8_compound_condition_roundtrip},
+        {"test_ezflash_compound_condition_does_not_leak", &test_ezflash_compound_condition_does_not_leak},
+        {"test_ezflash_fix8_transactional_parse", &test_ezflash_fix8_transactional_parse},
+        {"test_ezflash_fix8_multiline_continuation", &test_ezflash_fix8_multiline_continuation},
+        {"test_ezflash_fix8_comment_and_terminator_rules", &test_ezflash_fix8_comment_and_terminator_rules},
+        {"test_ezflash_fix8_compact_range_boundaries", &test_ezflash_fix8_compact_range_boundaries},
+        {"test_ezflash_fix8_runtime_limit", &test_ezflash_fix8_runtime_limit},
+        {"test_ezflash_fix8_physical_line_wrapping", &test_ezflash_fix8_physical_line_wrapping},
+        {"test_ezflash_fix8_section_names", &test_ezflash_fix8_section_names},
+        {"test_ezflash_enhanced_v21_gameshark_romif_roundtrip", &test_ezflash_enhanced_v21_gameshark_romif_roundtrip},
+        {"test_ezflash_enhanced_v21_armax_if_rom_tail", &test_ezflash_enhanced_v21_armax_if_rom_tail},
+        {"test_ezflash_enhanced_v21_long_rom_byte_lists", &test_ezflash_enhanced_v21_long_rom_byte_lists},
+        {"test_ezflash_enhanced_v3_condition_families_and_else", &test_ezflash_enhanced_v3_condition_families_and_else},
+        {"test_ezflash_enhanced_v3_arithmetic_pointer_fill_slide", &test_ezflash_enhanced_v3_arithmetic_pointer_fill_slide},
+        {"test_ezflash_enhanced_v3_romif_with_named_runtime_action", &test_ezflash_enhanced_v3_romif_with_named_runtime_action},
+        {"test_ezflash_fix8_shared_table_warning", &test_ezflash_fix8_shared_table_warning},
+        {"test_native_output_modes", &test_native_output_modes},
+        {"test_native_input_imports", &test_native_input_imports},
+    };
+
+    for (const TestCase& test : tests) {
+        try {
+            test.function();
+        } catch (const std::exception& error) {
+            std::cerr << "Test failure in " << test.name << ": "
+                      << error.what() << '\n';
+            return EXIT_FAILURE;
+        } catch (...) {
+            std::cerr << "Test failure in " << test.name
+                      << ": unknown exception\n";
+            return EXIT_FAILURE;
+        }
+    }
+
+    std::cout << "All tests passed\n";
+    return EXIT_SUCCESS;
+}
+
+} // namespace
+
+int main() {
+    return run_tests();
+}

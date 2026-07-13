@@ -1,0 +1,8 @@
+[Mixed Code]
+// Conversion Note: Line 3: GameShark/AR GBX ROM patch cannot be represented by the current common model
+// Source: 62000010 00001234
+
+32025BC4 00C2
+
+
+// Conversion Summary: 1 inline note(s); output may be partial.

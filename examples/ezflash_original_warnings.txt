@@ -1,0 +1,1 @@
+warning: Mode Test: EZ-Flash Original supports ON= only; the condition at source line 3 and its controlled operation(s) were not exported

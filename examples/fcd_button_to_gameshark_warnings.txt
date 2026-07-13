@@ -1,0 +1,2 @@
+warning: FCD Button Activator: bit-mask/button condition is not yet encoded at source line 2
+warning: FCD Button Activator: no GameShark/AR GBX-compatible operations

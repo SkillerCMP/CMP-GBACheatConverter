@@ -1,0 +1,8 @@
+[Xploder Example]
+82025BC4 423F
+82025BC6 000F
+
+[Xploder Conditional]
+72024C10 9EB7
+32024C10 00C2
+

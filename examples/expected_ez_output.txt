@@ -1,0 +1,12 @@
+[Infinite Money]
+ON=25BC4,3F,42,0F,00;
+
+[Infinite Cash]
+ON=25BC4,FF,E0,F5,05;
+
+[Conditional]
+IF=24C10,B7,9E;ON=24C10,C2;
+
+[Sapphire]
+IF=80130,BF,00;ON=405B0,00,00;405B8,00,02;405C0,14,EA,14,08;IF=405C0,3F,EA;ON=405C0,4A,EA;
+

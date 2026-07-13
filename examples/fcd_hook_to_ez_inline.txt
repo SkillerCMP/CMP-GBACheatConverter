@@ -1,0 +1,6 @@
+
+[Hook Conversion]
+# Conversion Note: Line 2: hook/master code cannot be represented by EZ-Flash; the entire dependent entry was skipped
+# Source: 10012346 0007
+
+# Conversion Summary: 1 inline note(s); output may be partial.

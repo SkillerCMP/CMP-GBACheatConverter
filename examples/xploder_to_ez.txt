@@ -1,0 +1,6 @@
+[Xploder Example]
+ON=25BC4,3F,42,0F,00;
+
+[Xploder Conditional]
+IF=24C10,B7,9E;ON=24C10,C2;
+

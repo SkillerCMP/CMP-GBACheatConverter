@@ -1,0 +1,6 @@
+
+[ROM Patch Dependency]
+// Conversion Note: Line 2: GameShark ROM patch cannot be represented by CodeBreaker/FCD; the entire dependent entry was skipped
+// Source: 60012345 0000ABCD
+
+// Conversion Summary: 1 inline note(s); output may be partial.

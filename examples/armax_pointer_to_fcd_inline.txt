@@ -1,0 +1,10 @@
+
+[Pointer Writes]
+// Conversion Note: Line 2: Action Replay MAX pointer write has no CodeBreaker/FCD equivalent
+// Source: 40200010 0001237F
+// Conversion Note: Line 3: Action Replay MAX pointer write has no CodeBreaker/FCD equivalent
+// Source: 42300020 0123ABCD
+// Conversion Note: Line 4: Action Replay MAX pointer write has no CodeBreaker/FCD equivalent
+// Source: 44300024 89ABCDEF
+
+// Conversion Summary: 3 inline note(s); output may be partial.

@@ -1,0 +1,8 @@
+
+[Device Button]
+// Conversion Note: Line 2: physical GameShark device button has no CodeBreaker/FCD equivalent
+// Source: 82112345 0000007F
+// Conversion Note: Line 3: physical GameShark device button has no CodeBreaker/FCD equivalent
+// Source: 83223456 00001234
+
+// Conversion Summary: 2 inline note(s); output may be partial.

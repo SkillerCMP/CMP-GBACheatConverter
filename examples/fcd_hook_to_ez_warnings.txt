@@ -1,0 +1,2 @@
+warning: Hook Conversion: hook/master code cannot be represented by EZ-Flash; the entire dependent entry was skipped at source line 2
+warning: Hook Conversion: no EZ-compatible operations

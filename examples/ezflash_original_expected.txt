@@ -1,0 +1,3 @@
+[Mode Test]
+ON=25BC4,3F,42;
+

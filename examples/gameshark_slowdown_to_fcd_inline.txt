@@ -1,0 +1,9 @@
+[Device Slowdown]
+// Conversion Note: Line 2: physical GameShark slowdown control has no CodeBreaker/FCD equivalent
+// Source: 80F00000 00001234
+
+82000100 CDEF
+82000102 89AB
+
+
+// Conversion Summary: 1 inline note(s); output may be partial.

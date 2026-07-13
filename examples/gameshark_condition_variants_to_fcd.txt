@@ -1,0 +1,13 @@
+[Condition Variants]
+// Conversion Note: Line 6: condition has no exact CodeBreaker/FCD encoding
+// Source: D2000014 00209ABC
+// Conversion Note: Line 8: condition has no exact CodeBreaker/FCD encoding
+// Source: D2000016 0030DEF0
+
+72000010 1234
+32000100 0011
+A2000012 5678
+82000102 2222
+
+
+// Conversion Summary: 2 inline note(s); output may be partial.

@@ -1,0 +1,37 @@
+#include <windows.h>
+
+101 ICON "@GBA_ICON_PATH@"
+
+1 RT_MANIFEST "@GBA_MANIFEST_PATH@"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,@GBA_VERSION_TWEAK@
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,@GBA_VERSION_TWEAK@
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "SkillerCMP\0"
+            VALUE "FileDescription", "GBA Cheat Converter\0"
+            VALUE "FileVersion", "@GBA_FILE_VERSION@\0"
+            VALUE "InternalName", "GbaCheatConverter\0"
+            VALUE "OriginalFilename", "GbaCheatConverter.exe\0"
+            VALUE "ProductName", "GBA Cheat Converter\0"
+            VALUE "ProductVersion", "@GBA_FILE_VERSION@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END
