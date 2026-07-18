@@ -3,6 +3,7 @@
 #include "core/text.hpp"
 #include "formats/armax.hpp"
 #include "formats/codebreaker.hpp"
+#include "formats/gameshark.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -146,6 +147,27 @@ exact_fcd(const CheatEntry& entry) {
         if (!first || !second) {
             return std::nullopt;
         }
+        result.emplace_back(*first, *second);
+    }
+    return result;
+}
+
+std::optional<std::vector<std::pair<std::uint32_t, std::uint32_t>>>
+exact_gameshark(const CheatEntry& entry, bool encrypted) {
+    const auto converted = gameshark::export_document(
+        one_entry_document(entry), {encrypted});
+    if (!converted.success || !converted.warnings.empty()) {
+        return std::nullopt;
+    }
+    const auto lines = code_lines(converted.text, true);
+    if (lines.empty()) {
+        return std::nullopt;
+    }
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> result;
+    for (const std::string& line : lines) {
+        const auto first = text::parse_hex_u32(line.substr(0U, 8U));
+        const auto second = text::parse_hex_u32(line.substr(9U, 8U));
+        if (!first || !second) return std::nullopt;
         result.emplace_back(*first, *second);
     }
     return result;

@@ -1,5 +1,6 @@
 #include "formats/ezflash_internal.hpp"
 
+#include "core/gba_memory.hpp"
 #include "core/text.hpp"
 
 #include <algorithm>
@@ -24,13 +25,14 @@ std::vector<ConditionTerm> condition_terms(const Operation& operation) {
 }
 
 std::optional<std::uint32_t> compact_write_address(std::uint32_t address) {
-    if (address >= 0x02000000U && address <= 0x0203FFFFU) {
-        return address - 0x02000000U;
+    const auto canonical = memory::canonical_ram_address(address);
+    if (!canonical) {
+        return std::nullopt;
     }
-    if (address >= 0x03000000U && address <= 0x03007FFFU) {
-        return 0x40000U + (address - 0x03000000U);
+    if ((*canonical & 0xFF000000U) == 0x02000000U) {
+        return *canonical - 0x02000000U;
     }
-    return std::nullopt;
+    return 0x40000U + (*canonical - 0x03000000U);
 }
 
 std::optional<std::uint32_t> compact_condition_address(std::uint32_t address) {
@@ -47,7 +49,7 @@ using detail::canonical_rom_address;
 
 bool is_rom_address(std::uint32_t address) {
     // Semantic operations always store full GBA addresses. Relative ROM
-    // offsets are accepted only by the textual ROM=/ROMIF= parser.
+    // offsets are accepted only by the textual ROM:/ROMIF: parser.
     return address >= 0x08000000U && address <= 0x0DFFFFFFU;
 }
 
@@ -59,7 +61,7 @@ bool rom_patch_is_direct_image_write(const Operation& operation) {
 
     // GameShark mode 0 and every audited AR MAX patch are direct 16-bit
     // image replacements. GameShark mode 1/2 interception flags do not have
-    // an exact boot-time image-patch equivalent in Enhanced v3.
+    // an exact boot-time image-patch equivalent in Enhanced E7.
     if (operation.encoding_hint != EncodingHint::ActionReplayMaxRomPatch &&
         operation.encoding_parameter != 0U) {
         return false;
@@ -120,6 +122,10 @@ bool is_condition(OperationKind kind) {
     case OperationKind::IfLessOrEqual:
     case OperationKind::IfAnd:
     case OperationKind::IfNand:
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
     case OperationKind::IfDeviceButton:
         return true;
     default:
@@ -181,7 +187,7 @@ EntryGroups build_groups(const CheatEntry& entry,
             if (operation.condition_has_else || else_span != 0U) {
                 warnings.push_back(
                     entry.name +
-                    ": EZ-Flash Enhanced v3 does not support ELSE branches; "
+                    ": EZ-Flash Enhanced E7 does not support ELSE branches; "
                     "the condition and both branches were not exported at "
                     "source line " + std::to_string(operation.source_line));
                 result.compatibility_error = true;
@@ -205,7 +211,7 @@ EntryGroups build_groups(const CheatEntry& entry,
             if (operation.kind != OperationKind::IfEqual) {
                 warnings.push_back(
                     entry.name +
-                    ": EZ-Flash Enhanced v3 supports exact equality "
+                    ": EZ-Flash Enhanced E7 supports exact equality "
                     "conditions only; unsupported condition at source line " +
                     std::to_string(operation.source_line));
                 result.compatibility_error = true;
@@ -374,7 +380,7 @@ EntryGroups build_groups(const CheatEntry& entry,
                 warnings.push_back(
                     entry.name +
                     ": ROM patch mode/metadata has no exact EZ-Flash "
-                    "Enhanced v3 image-patch mapping at source line " +
+                    "Enhanced E7 image-patch mapping at source line " +
                     std::to_string(operation.source_line));
                 result.compatibility_error = true;
                 return EntryGroups{{}, {}, {}, {}, true};
@@ -399,7 +405,7 @@ EntryGroups build_groups(const CheatEntry& entry,
             warnings.push_back(
                 entry.name +
                 ": physical GameShark slowdown control has no EZ-Flash "
-                "Enhanced v3 equivalent at source line " +
+                "Enhanced E7 equivalent at source line " +
                 std::to_string(operation.source_line));
             result.compatibility_error = true;
             continue;

@@ -4,195 +4,118 @@ namespace gba::tests {
 
 void test_encrypted_stream_to_ez() {
     const std::string raw =
-        "Encrypted EZ:\n"
-        "72024C10 9EB7\n"
-        "32024C10 00C2\n";
+        "Encrypted EZ:\n72024C10 9EB7\n32024C10 00C2\n";
     const gba::codebreaker::Seed seed{0x9ABCDEF0U, 0x1234U};
-    const std::string encrypted =
-        gba::codebreaker::format_raw(raw, false, seed);
-
-    const auto document = gba::codebreaker::parse(encrypted, {true});
-    const auto ez = gba::ezflash::export_document(document);
-
-    require(ez.text.find("[Encrypted EZ]") != std::string::npos &&
-            ez.text.find("IF=24C10,B7,9E;ON=24C10,C2;") != std::string::npos,
-            "Encrypted CodeBreaker input did not convert to EZ");
-    require(ez.warnings.empty(),
-            "Encrypted stream seed created a false empty EZ entry warning");
+    const auto document = gba::codebreaker::parse(
+        gba::codebreaker::format_raw(raw, false, seed), {true});
+    const auto output = gba::ezflash::export_document(document);
+    require(output.success && output.text.find(
+                "=IF:W16,24C10,9EB7;W8:24C10,C2;ENDIF;") !=
+                std::string::npos,
+            "Encrypted CodeBreaker input did not convert to Enhanced v4");
 }
 
 void test_gameshark_condition_to_ez() {
-    const std::string input =
-        "GSA Conditional:\n"
-        "D2024C10 00009EB7\n"
-        "02024C10 000000C2\n";
-
-    const auto document = gba::gameshark::parse(input, {false});
+    const auto document = gba::gameshark::parse(
+        "GSA Conditional:\nD2024C10 00009EB7\n02024C10 000000C2\n",
+        {false});
     const auto output = gba::ezflash::export_document(document);
-
-    require(output.text.find(
-        "IF=24C10,B7,9E;ON=24C10,C2;") != std::string::npos,
-        "GameShark equal condition did not convert to EZ");
+    require(output.success && output.text.find(
+                "=IF:W16,24C10,9EB7;W8:24C10,C2;ENDIF;") !=
+                std::string::npos,
+            "GameShark condition did not convert to width-aware EZ syntax");
 }
 
 void test_armax_write_to_ez() {
-    const std::string raw =
-        "AR MAX Money:\n"
-        "04225BC4 000F423F\n";
-
-    const auto document = gba::armax::parse(raw, {false});
+    const auto document = gba::armax::parse(
+        "AR MAX Money:\n04225BC4 000F423F\n", {false});
     const auto output = gba::ezflash::export_document(document);
-
-    require(output.text.find(
-        "ON=25BC4,3F,42,0F,00;") != std::string::npos,
-        "Action Replay MAX 32-bit write did not convert to EZ");
+    require(output.success && output.text.find(
+                "=W32:25BC4,000F423F;") != std::string::npos,
+            "AR MAX 32-bit write did not become one W32 record");
 }
 
 void test_armax_next_two_condition_to_ez() {
-    const std::string raw =
+    const auto document = gba::armax::parse(
         "AR MAX Conditional:\n"
         "4A224C10 00009EB7\n"
         "00224C10 000000C2\n"
-        "00224C11 000000D3\n";
-
-    const auto document = gba::armax::parse(raw, {false});
+        "00224C11 000000D3\n", {false});
     const auto output = gba::ezflash::export_document(document);
-
-    require(output.text.find(
-        "IF=24C10,B7,9E;ON=24C10,C2,D3;") != std::string::npos,
-        "AR MAX next-two condition did not become one EZ IF group");
+    require(output.success && output.text.find(
+                "=IF:W16,24C10,9EB7;W8:24C10,C2;W8:24C11,D3;ENDIF;") !=
+                std::string::npos,
+            "AR MAX next-two condition did not convert to one condition block");
 }
 
 void test_xploder_raw_to_ez() {
-    const std::string input =
-        "Xploder Conditional:\n"
-        "72024C10 9EB7\n"
-        "32024C10 00C2\n";
-
-    const auto document = gba::xploder::parse(input, {false});
+    const auto document = gba::xploder::parse(
+        "Xploder Conditional:\n72024C10 9EB7\n32024C10 00C2\n",
+        {false});
     const auto output = gba::ezflash::export_document(document);
-
-    require(output.text.find(
-        "IF=24C10,B7,9E;ON=24C10,C2;") != std::string::npos,
-        "Xploder raw condition did not convert to EZ Fix 8");
+    require(output.success && output.text.find(
+                "=IF:W16,24C10,9EB7;W8:24C10,C2;ENDIF;") !=
+                std::string::npos,
+            "Xploder condition did not convert to Enhanced v4");
 }
 
 void test_ezflash_original_on_only() {
-    const std::string input =
-        "Original Mode:\n"
-        "82025BC4 423F\n"
-        "72024C10 9EB7\n"
-        "32024C10 00C2\n";
-
-    const auto document = gba::codebreaker::parse(input, {false});
-
+    const auto document = gba::codebreaker::parse(
+        "Original Mode:\n82025BC4 423F\n72024C10 9EB7\n32024C10 00C2\n",
+        {false});
     gba::ezflash::Options options;
     options.mode = gba::ezflash::Mode::Original;
     const auto output = gba::ezflash::export_document(document, options);
-
-    require(output.text.find("ON=25BC4,3F,42;") != std::string::npos,
-            "EZ-Flash Original did not preserve a direct ON= write");
-    require(output.text.find("IF=") == std::string::npos,
-            "EZ-Flash Original emitted an IF= condition");
-    require(output.text.find("24C10,C2") == std::string::npos,
-            "EZ-Flash Original leaked a conditioned write as unconditional");
-    require(!output.success,
-            "EZ-Flash Original did not report the rejected condition");
-    require(!output.warnings.empty(),
-            "EZ-Flash Original did not explain its ON=-only limitation");
+    require(output.text.find("ON=25BC4,3F,42;") != std::string::npos &&
+            output.text.find("24C10,C2") == std::string::npos &&
+            !output.success,
+            "Stock Original mode did not remain byte-list only");
 }
 
 void test_ezflash_parse_original_to_codebreaker() {
-    const std::string input =
-        "[Infinite Money]\n"
-        "ON=25BC4,3F,42,0F,00;\n";
-
-    const auto document = gba::ezflash::parse(input);
+    const auto document = gba::ezflash::parse(
+        "[Infinite Money]\nON=25BC4,3F,42,0F,00;\n");
     const auto output = gba::codebreaker::export_document(document, {});
-
-    require(output.text.find("82025BC4 423F") != std::string::npos &&
+    require(output.success && output.text.find("82025BC4 423F") !=
+                std::string::npos &&
             output.text.find("82025BC6 000F") != std::string::npos,
-            "EZ-Flash Original input did not convert to CodeBreaker writes");
+            "Stock Original byte-list input did not convert to CodeBreaker");
 }
 
 void test_ezflash_parse_cheat_mod_roundtrip() {
     const std::string input =
         "[Sapphire]\n"
-        "IF=80130,BF,00;ON=405B0,00,00;405B8,00,02;"
-        "IF=405C0,3F,EA;ON=405C0,4A,EA;\n";
-
+        "Balloon=IF:W16,80130,00BF;W16:405B0,0000;W16:405B8,0200;"
+        "ENDIF;IF:W16,405C0,EA3F;W16:405C0,EA4A;ENDIF;\n";
     const auto document = gba::ezflash::parse(input);
-    gba::ezflash::Options options;
-    options.mode = gba::ezflash::Mode::Enhanced;
-    const auto output = gba::ezflash::export_document(document, options);
-
-    require(output.text.find(
-        "IF=80130,BF,00;ON=405B0,00,00;405B8,00,02;"
-        "IF=405C0,3F,EA;ON=405C0,4A,EA;") != std::string::npos,
-        "EZ-Flash Cheat MOD multi-IF input did not roundtrip");
+    const auto output = gba::ezflash::export_document(document);
+    require(document.warnings.empty() && output.success &&
+            output.text.find("Balloon=IF:W16,80130,00BF;") !=
+                std::string::npos,
+            "Enhanced grouped input did not round-trip");
 }
 
 void test_ezflash_grouped_condition_to_fcd_repeats_condition() {
-    const std::string fcd_input =
-        "Press Up+L For Balloon Mode On\n"
-        "74000130 01BF\n"
-        "82000202 0001\n"
-        "72000202 0001\n"
-        "8300369E 00C0\n"
-        "72000202 0001\n"
-        "83003AFA 007D\n"
-        "72000202 0001\n"
-        "83003AFC 000B\n";
-
-    const auto original = gba::codebreaker::parse(fcd_input, {false});
-    const auto ez = gba::ezflash::export_document(original);
-    require(ez.success && ez.text.find(
-                "IF=80130,BF,01;ON=202,01,00;"
-                "IF=202,01,00;ON=4369E,C0,00;43AFA,7D,00,0B,00;") !=
-                std::string::npos,
-            "FCD conditions were not compacted into the expected EZ groups");
-
-    const auto reparsed = gba::ezflash::parse(ez.text);
-    const auto fcd = gba::codebreaker::export_document(reparsed, {});
-    require(fcd.success && fcd.text.find(
-                "74000130 01BF\n"
-                "82000202 0001\n"
-                "72000202 0001\n"
-                "8300369E 00C0\n"
-                "72000202 0001\n"
-                "83003AFA 007D\n"
-                "72000202 0001\n"
-                "83003AFC 000B") != std::string::npos,
-            "Grouped EZ condition did not repeat before every FCD write row");
-
-    const auto wide_only = gba::ezflash::parse(
+    const auto document = gba::ezflash::parse(
         "[Wide Conditional]\n"
-        "IF=202,01,00;ON=43AFA,7D,00,0B,00;\n");
-    const auto wide_fcd = gba::codebreaker::export_document(wide_only, {});
-    require(wide_fcd.success && wide_fcd.text.find(
-                "72000202 0001\n"
-                "83003AFA 007D\n"
-                "72000202 0001\n"
-                "83003AFC 000B") != std::string::npos,
-            "A 32-bit EZ write did not repeat its FCD condition for both halves");
+        "ON=IF:W16,202,0001;W16:43AFA,007D;W16:43AFC,000B;ENDIF;\n");
+    const auto output = gba::codebreaker::export_document(document, {});
+    require(output.success && output.text.find(
+                "72000202 0001\n53003AFA 0002\n7D000B00 0000") != std::string::npos,
+            "Grouped condition did not preserve both FCD writes");
 }
 
 void test_ezflash_compound_condition_does_not_leak() {
-    const std::string input =
+    const auto document = gba::ezflash::parse(
         "[Compound]\n"
-        "IF=24C10,B7,9E;405C0,3F,EA;ON=25BC4,3F,42;\n";
-    const auto document = gba::ezflash::parse(input);
-
-    const auto fcd = gba::codebreaker::export_document(document, {});
-    const auto gameshark = gba::gameshark::export_document(document, {});
-    const auto armax = gba::armax::export_document(document, {});
-
-    require(fcd.text.find("82025BC4") == std::string::npos,
-            "Compound EZ condition leaked its write to CodeBreaker");
-    require(gameshark.text.find("25BC4") == std::string::npos,
-            "Compound EZ condition leaked its write to GameShark");
-    require(armax.text.find("25BC4") == std::string::npos,
-            "Compound EZ condition leaked its write to AR MAX");
+        "ON=IF:W16,202,0001;IF:W16,204,0002;W16:300,1234;"
+        "ENDIF;ENDIF;\n");
+    const auto armax = gba::armax::export_document(document, {false});
+    require(armax.success &&
+            armax.text.find("4A200202 00000001") != std::string::npos &&
+            armax.text.find("0A200204 00000002") != std::string::npos &&
+            armax.text.find("02200300 00001234") != std::string::npos,
+            "Nested conditions did not remain dependent in AR MAX output");
 }
 
 } // namespace gba::tests

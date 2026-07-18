@@ -1,0 +1,2 @@
+[Mirrored EWRAM]
+3C8BBA54 A8648690

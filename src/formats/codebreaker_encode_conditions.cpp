@@ -86,7 +86,7 @@ void encode_condition_operation(EncodeState& state,
             return;
         }
 
-        // EZ-Flash Fix 8 can place several writes under one IF group. FCD
+        // EZ-Flash Enhanced can place several writes under one IF group. FCD
         // conditions control only the next physical operation, so expand a
         // non-packable group by repeating the condition before every emitted
         // write row. A 32-bit semantic write becomes two conditioned rows.

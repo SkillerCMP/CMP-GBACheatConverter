@@ -1,0 +1,36 @@
+100% Health , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+73005904 1C00
+33005924 0064
+Low Trial Time , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+32002714 0000
+3200270C 0001
+7201DDF8 003C
+3201DE04 0000
+Moon Jump , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+D0000020 0001
+3201505C 0080
+Start With 20 Boxes , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+720026E8 0000
+320026E8 0014
+!Have:
+Golden Aku Aku Mask , by MadCatz , Crypt_Codebreaker/GameShark SP/Xploder
+320026F0 0002
+Invincible Aku Aku Mask , by MadCatz , Crypt_Codebreaker/GameShark SP/Xploder
+320026F0 0003
+Wampa Fruit , by MadCatz , Crypt_Codebreaker/GameShark SP/Xploder
+320026E4 0063
+3 Masks (Invincible) , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+320026F0 0003
+72015086 0000
+32015085 002F
+All Crystals+Relics+Gems , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+420027CC 01FF
+00000018 0004
+All Gem Shards , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+320027CA 00FF
+32006770 0001
+All Powers , by Shimer , Crypt_Codebreaker/GameShark SP/Xploder
+320027CB 00FF
+Max Boxes Collected , by MadCatz , Crypt_Codebreaker/GameShark SP/Xploder
+320026E8 00FF
+!!

@@ -152,6 +152,18 @@ LRESULT handle_command(WPARAM wparam, LPARAM lparam) {
     case ID_EDIT_SELECT_ALL:
         SendMessageW(focused_edit_control(), EM_SETSEL, 0, -1);
         return 0;
+    case ID_EDIT_INPUT_WORD_WRAP:
+        set_input_word_wrap(!g_input_word_wrap);
+        update_word_wrap_menus();
+        set_status(g_input_word_wrap ? L"Input Word Wrap enabled."
+                                     : L"Input Word Wrap disabled.");
+        return 0;
+    case ID_EDIT_OUTPUT_WORD_WRAP:
+        set_output_word_wrap(!g_output_word_wrap);
+        update_word_wrap_menus();
+        set_status(g_output_word_wrap ? L"Output Word Wrap enabled."
+                                      : L"Output Word Wrap disabled.");
+        return 0;
     case ID_OPTIONS_AUTO_CONVERT:
         g_auto_convert = !g_auto_convert;
         update_auto_convert_menu();
@@ -160,6 +172,13 @@ LRESULT handle_command(WPARAM wparam, LPARAM lparam) {
         if (g_auto_convert) {
             maybe_auto_convert();
         }
+        return 0;
+    case ID_OPTIONS_CMP_OUTPUT:
+        g_cmp_output = !g_cmp_output;
+        update_cmp_output_menu();
+        set_status(g_cmp_output ? L"CMP Output enabled."
+                                : L"CMP Output disabled.");
+        maybe_auto_convert();
         return 0;
     case ID_OPTIONS_EZ_ORIGINAL:
         g_ezflash_mode = gba::ezflash::Mode::Original;
@@ -172,7 +191,7 @@ LRESULT handle_command(WPARAM wparam, LPARAM lparam) {
     case ID_OPTIONS_EZ_ENHANCED:
         g_ezflash_mode = gba::ezflash::Mode::Enhanced;
         update_ezflash_mode_menu();
-        set_status(L"EZ-Flash mode: Enhanced v3.");
+        set_status(L"EZ-Flash mode: Enhanced E7 revision 6.");
         if (g_auto_convert && g_output_format == GuiFormat::EzFlash) {
             maybe_auto_convert();
         }

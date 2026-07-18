@@ -4,7 +4,7 @@ namespace gba::tests {
 
 void test_auto_detect_ezflash() {
     const auto result = gba::detect::format(
-        "[EZ Test]\nIF=24C10,B7,9E;ON=24C10,C2;\n");
+        "[EZ Test]\nON=IF:W16,24C10,9EB7;W8:24C10,C2;ENDIF;\n");
     require(result.format == gba::detect::Format::EzFlash,
             "Auto Detect did not recognize EZ-Flash syntax");
     require(result.confidence == gba::detect::Confidence::High,
@@ -172,6 +172,23 @@ void test_auto_detect_armax_block_and_button() {
     require(encrypted_detect.format ==
                 gba::detect::Format::ActionReplayMaxEncrypted,
             "Auto Detect missed encrypted AR MAX block/button input");
+}
+
+
+void test_auto_detect_single_armax_encrypted_mirror_write() {
+    const auto result = gba::detect::format("3C8BBA54 A8648690\n");
+    require(result.format ==
+                gba::detect::Format::ActionReplayMaxEncrypted,
+            "Auto Detect did not recognize the single encrypted AR MAX "
+            "mirrored-RAM write");
+}
+
+void test_auto_detect_ezflash_masked_condition() {
+    const auto result = gba::detect::format(
+        "[Moon Jump]\n"
+        "ON=IFM:W16,80130,0001,0000;W8:1505C,80;ENDIF;\n");
+    require(result.format == gba::detect::Format::EzFlash,
+            "Auto Detect did not recognize an IFM Enhanced option");
 }
 
 } // namespace gba::tests

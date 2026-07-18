@@ -53,6 +53,11 @@ HMENU create_main_menu() {
     AppendMenuW(edit, MF_STRING, ID_EDIT_CLEAR, L"C&lear\tCtrl+D");
     AppendMenuW(edit, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(edit, MF_STRING, ID_EDIT_SELECT_ALL, L"Select &All\tCtrl+A");
+    AppendMenuW(edit, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(edit, MF_STRING, ID_EDIT_INPUT_WORD_WRAP,
+                L"&Input Word Wrap");
+    AppendMenuW(edit, MF_STRING, ID_EDIT_OUTPUT_WORD_WRAP,
+                L"&Output Word Wrap");
 
     const wchar_t* fcd = L"CodeBreaker / GameShark SP / Xploder Advance";
     const wchar_t* gsa = L"GameShark Advance / Action Replay GBX";
@@ -94,6 +99,8 @@ HMENU create_main_menu() {
 
     AppendMenuW(options, MF_STRING, ID_OPTIONS_AUTO_CONVERT,
                 L"&Auto Convert");
+    AppendMenuW(options, MF_STRING, ID_OPTIONS_CMP_OUTPUT,
+                L"&CMP Output");
     AppendMenuW(options, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(g_ezflash_menu, MF_STRING,
                 ID_OPTIONS_EZ_ORIGINAL, L"&Original");
@@ -125,6 +132,116 @@ HWND create_control(const wchar_t* class_name,
         0, 0, 1, 1,
         g_main, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
         GetModuleHandleW(nullptr), nullptr);
+}
+
+DWORD code_editor_style(bool word_wrap) {
+    DWORD style = ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
+        ES_WANTRETURN | WS_VSCROLL | WS_TABSTOP;
+    if (!word_wrap) {
+        style |= ES_AUTOHSCROLL | WS_HSCROLL;
+    }
+    return style;
+}
+
+void replace_code_editor(HWND& editor,
+                         WNDPROC& original_proc,
+                         int id,
+                         bool word_wrap) {
+    if (!editor) {
+        return;
+    }
+
+    const LONG_PTR current_style = GetWindowLongPtrW(editor, GWL_STYLE);
+    const bool currently_wrapped =
+        (current_style & ES_AUTOHSCROLL) == 0 &&
+        (current_style & WS_HSCROLL) == 0;
+    if (currently_wrapped == word_wrap) {
+        return;
+    }
+
+    const HWND old_editor = editor;
+    const std::wstring text = get_window_text(old_editor);
+    DWORD selection_start = 0;
+    DWORD selection_end = 0;
+    SendMessageW(old_editor, EM_GETSEL,
+                 reinterpret_cast<WPARAM>(&selection_start),
+                 reinterpret_cast<LPARAM>(&selection_end));
+    const LRESULT first_visible_line =
+        SendMessageW(old_editor, EM_GETFIRSTVISIBLELINE, 0, 0);
+    const LRESULT text_limit =
+        SendMessageW(old_editor, EM_GETLIMITTEXT, 0, 0);
+    const LRESULT modified = SendMessageW(old_editor, EM_GETMODIFY, 0, 0);
+    const bool had_focus = GetFocus() == old_editor;
+    const bool was_last_editor = g_last_code_editor == old_editor;
+    HWND insert_after = GetWindow(old_editor, GW_HWNDPREV);
+
+    RECT rectangle{};
+    GetWindowRect(old_editor, &rectangle);
+    MapWindowPoints(HWND_DESKTOP, g_main,
+                    reinterpret_cast<POINT*>(&rectangle), 2);
+
+    HWND replacement = create_control(
+        L"EDIT", L"", code_editor_style(word_wrap),
+        WS_EX_CLIENTEDGE, id);
+    if (!replacement) {
+        return;
+    }
+    ShowWindow(replacement, SW_HIDE);
+
+    SetWindowLongPtrW(
+        old_editor, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(original_proc));
+    DestroyWindow(old_editor);
+
+    editor = replacement;
+    original_proc = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtrW(
+            replacement, GWLP_WNDPROC,
+            reinterpret_cast<LONG_PTR>(code_editor_proc)));
+
+    SendMessageW(replacement, WM_SETFONT,
+                 reinterpret_cast<WPARAM>(g_code_font), TRUE);
+    SendMessageW(replacement, EM_SETLIMITTEXT,
+                 static_cast<WPARAM>(text_limit), 0);
+
+    const bool previous_in_convert = g_in_convert;
+    g_in_convert = true;
+    SetWindowTextW(replacement, text.c_str());
+    g_in_convert = previous_in_convert;
+
+    SendMessageW(replacement, EM_SETSEL,
+                 static_cast<WPARAM>(selection_start),
+                 static_cast<LPARAM>(selection_end));
+    SendMessageW(replacement, EM_SETMODIFY,
+                 static_cast<WPARAM>(modified != 0), 0);
+    if (first_visible_line > 0) {
+        SendMessageW(replacement, EM_LINESCROLL, 0, first_visible_line);
+    }
+
+    SetWindowPos(
+        replacement, insert_after ? insert_after : HWND_TOP,
+        rectangle.left, rectangle.top,
+        rectangle.right - rectangle.left,
+        rectangle.bottom - rectangle.top,
+        SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+    if (was_last_editor) {
+        g_last_code_editor = replacement;
+    }
+    if (had_focus) {
+        SetFocus(replacement);
+    }
+}
+
+void set_input_word_wrap(bool enabled) {
+    replace_code_editor(
+        g_input_edit, g_input_edit_proc, ID_INPUT_EDIT, enabled);
+    g_input_word_wrap = enabled;
+}
+
+void set_output_word_wrap(bool enabled) {
+    replace_code_editor(
+        g_output_edit, g_output_edit_proc, ID_OUTPUT_EDIT, enabled);
+    g_output_word_wrap = enabled;
 }
 
 void create_controls() {
@@ -160,12 +277,12 @@ void create_controls() {
         L"EDIT", L"9ABCDEF0:1234", ES_AUTOHSCROLL | WS_TABSTOP,
         WS_EX_CLIENTEDGE, ID_OUTPUT_SEED_EDIT);
 
-    const DWORD editor_style = ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL |
-        ES_AUTOHSCROLL | ES_WANTRETURN | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP;
     g_input_edit = create_control(
-        L"EDIT", L"", editor_style, WS_EX_CLIENTEDGE, ID_INPUT_EDIT);
+        L"EDIT", L"", code_editor_style(g_input_word_wrap),
+        WS_EX_CLIENTEDGE, ID_INPUT_EDIT);
     g_output_edit = create_control(
-        L"EDIT", L"", editor_style, WS_EX_CLIENTEDGE, ID_OUTPUT_EDIT);
+        L"EDIT", L"", code_editor_style(g_output_word_wrap),
+        WS_EX_CLIENTEDGE, ID_OUTPUT_EDIT);
 
     g_input_edit_proc = reinterpret_cast<WNDPROC>(
         SetWindowLongPtrW(

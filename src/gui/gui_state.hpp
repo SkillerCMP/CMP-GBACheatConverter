@@ -12,6 +12,7 @@
 #include <cstdio>
 
 #include "cli/cli_app.hpp"
+#include "core/cmp.hpp"
 #include "core/detect.hpp"
 #include "core/inline_notes.hpp"
 #include "core/text.hpp"
@@ -74,9 +75,12 @@ inline constexpr int ID_EDIT_COPY = 2011;
 inline constexpr int ID_EDIT_PASTE = 2012;
 inline constexpr int ID_EDIT_SELECT_ALL = 2013;
 inline constexpr int ID_EDIT_CLEAR = 2014;
+inline constexpr int ID_EDIT_INPUT_WORD_WRAP = 2015;
+inline constexpr int ID_EDIT_OUTPUT_WORD_WRAP = 2016;
 inline constexpr int ID_OPTIONS_AUTO_CONVERT = 2020;
 inline constexpr int ID_OPTIONS_EZ_ORIGINAL = 2021;
 inline constexpr int ID_OPTIONS_EZ_ENHANCED = 2022;
+inline constexpr int ID_OPTIONS_CMP_OUTPUT = 2023;
 inline constexpr int ID_HELP_ABOUT = 2030;
 inline constexpr int IDI_APP_ICON = 101;
 
@@ -143,6 +147,9 @@ extern HMENU g_ezflash_menu;
 extern HMENU g_save_output_as_menu;
 
 extern bool g_auto_convert;
+extern bool g_cmp_output;
+extern bool g_input_word_wrap;
+extern bool g_output_word_wrap;
 extern GuiFormat g_input_format;
 extern GuiFormat g_output_format;
 extern gba::ezflash::Mode g_ezflash_mode;
@@ -156,6 +163,7 @@ extern bool g_updating_input_seed;
 
 std::wstring utf8_to_wide(std::string_view input);
 std::string wide_to_utf8(std::wstring_view input);
+void prepare_cli_standard_streams();
 std::wstring normalize_for_edit(std::string_view input);
 std::wstring normalize_wide_for_edit(std::wstring_view input);
 std::string normalize_from_edit(std::wstring_view input);
@@ -190,6 +198,8 @@ void update_seed_controls();
 void select_input_format(GuiFormat format);
 void select_output_format(GuiFormat format);
 void update_auto_convert_menu();
+void update_cmp_output_menu();
+void update_word_wrap_menus();
 void update_ezflash_mode_menu();
 
 void show_warnings(const std::vector<std::string>& warnings,
@@ -220,6 +230,8 @@ int splitter_center(HWND window);
 void update_splitter_from_x(int x);
 HMENU create_main_menu();
 void create_controls();
+void set_input_word_wrap(bool enabled);
+void set_output_word_wrap(bool enabled);
 LRESULT handle_command(WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK window_proc(HWND window, UINT message,
                              WPARAM wparam, LPARAM lparam);

@@ -62,6 +62,25 @@ encode_condition_words(const Operation& operation) {
         return std::nullopt;
     }
 
+    if (operation.condition_has_mask) {
+        if (operation.value != 0U || operation.condition_mask > 0xFFFFU) {
+            return std::nullopt;
+        }
+        if (operation.kind == OperationKind::IfEqual &&
+            operation.address == 0x04000130U) {
+            return std::pair{
+                0xD0000020U,
+                static_cast<std::uint16_t>(operation.condition_mask)};
+        }
+        if (operation.kind == OperationKind::IfNotEqual &&
+            operation.address < 0x10000000U) {
+            return std::pair{
+                0xF0000000U | (operation.address & 0x0FFFFFFFU),
+                static_cast<std::uint16_t>(operation.condition_mask)};
+        }
+        return std::nullopt;
+    }
+
     // PAR v3 distinguishes signed and unsigned strict comparisons. FCD B/C
     // are unsigned, so a preserved signed PAR v3 condition must not be
     // silently changed while crossing formats.
@@ -171,7 +190,14 @@ bool can_encode_fcd_action(const Operation& operation) {
     case OperationKind::IfLessOrEqual:
     case OperationKind::IfAnd:
     case OperationKind::IfNand:
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
     case OperationKind::IfDeviceButton:
+    case OperationKind::Transfer:
+    case OperationKind::ReadSubstitute:
+    case OperationKind::CompareReadSubstitute:
     case OperationKind::Unsupported:
         return false;
     }

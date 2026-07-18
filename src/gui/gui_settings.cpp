@@ -5,6 +5,12 @@ namespace gba::gui {
 void load_settings() {
     g_auto_convert = GetPrivateProfileIntW(
         L"GUI", L"AutoConvert", 0, g_ini_path.c_str()) != 0;
+    g_cmp_output = GetPrivateProfileIntW(
+        L"GUI", L"CmpOutput", 0, g_ini_path.c_str()) != 0;
+    const bool input_word_wrap = GetPrivateProfileIntW(
+        L"GUI", L"InputWordWrap", 0, g_ini_path.c_str()) != 0;
+    const bool output_word_wrap = GetPrivateProfileIntW(
+        L"GUI", L"OutputWordWrap", 0, g_ini_path.c_str()) != 0;
     g_ezflash_mode = GetPrivateProfileIntW(
         L"EZ-Flash", L"Mode", 1, g_ini_path.c_str()) == 0
         ? gba::ezflash::Mode::Original
@@ -68,6 +74,10 @@ void load_settings() {
     SetWindowTextW(g_output_seed_edit, seed);
 
     update_auto_convert_menu();
+    update_cmp_output_menu();
+    set_input_word_wrap(input_word_wrap);
+    set_output_word_wrap(output_word_wrap);
+    update_word_wrap_menus();
     update_ezflash_mode_menu();
     update_format_menus();
     update_format_labels();
@@ -77,6 +87,15 @@ void load_settings() {
 void save_settings() {
     WritePrivateProfileStringW(
         L"GUI", L"AutoConvert", g_auto_convert ? L"1" : L"0",
+        g_ini_path.c_str());
+    WritePrivateProfileStringW(
+        L"GUI", L"CmpOutput", g_cmp_output ? L"1" : L"0",
+        g_ini_path.c_str());
+    WritePrivateProfileStringW(
+        L"GUI", L"InputWordWrap", g_input_word_wrap ? L"1" : L"0",
+        g_ini_path.c_str());
+    WritePrivateProfileStringW(
+        L"GUI", L"OutputWordWrap", g_output_word_wrap ? L"1" : L"0",
         g_ini_path.c_str());
     WritePrivateProfileStringW(
         L"GUI", L"SplitterPercent",

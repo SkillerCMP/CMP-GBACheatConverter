@@ -66,14 +66,42 @@ std::vector<std::string> command_line_arguments() {
     return arguments;
 }
 
-bool valid_standard_handle(DWORD standard_handle) {
-    const HANDLE handle = GetStdHandle(standard_handle);
+namespace {
+
+bool valid_handle(HANDLE handle) {
     return handle != nullptr && handle != INVALID_HANDLE_VALUE;
+}
+
+bool redirected_handle(HANDLE handle) {
+    if (!valid_handle(handle)) {
+        return false;
+    }
+    DWORD console_mode = 0;
+    if (GetConsoleMode(handle, &console_mode)) {
+        return false;
+    }
+    const DWORD type = GetFileType(handle);
+    return type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE;
+}
+
+HANDLE duplicate_redirected_standard_handle(DWORD standard_handle) {
+    const HANDLE source = GetStdHandle(standard_handle);
+    if (!redirected_handle(source)) {
+        return nullptr;
+    }
+
+    HANDLE duplicate = nullptr;
+    if (!DuplicateHandle(GetCurrentProcess(), source,
+                         GetCurrentProcess(), &duplicate,
+                         0, TRUE, DUPLICATE_SAME_ACCESS)) {
+        return nullptr;
+    }
+    return duplicate;
 }
 
 bool bind_crt_stream(FILE* stream, DWORD standard_handle, int open_flags) {
     const HANDLE source = GetStdHandle(standard_handle);
-    if (source == nullptr || source == INVALID_HANDLE_VALUE) {
+    if (!valid_handle(source)) {
         return false;
     }
 
@@ -96,23 +124,50 @@ bool bind_crt_stream(FILE* stream, DWORD standard_handle, int open_flags) {
     return success;
 }
 
+} // namespace
+
 void prepare_cli_standard_streams() {
+    // GUI-subsystem executables can lose redirected handles when attaching to
+    // their parent console. Preserve file/pipe handles first, then restore
+    // them after AttachConsole so `> output.clt` remains binary redirection.
+    const HANDLE redirected_input =
+        duplicate_redirected_standard_handle(STD_INPUT_HANDLE);
+    const HANDLE redirected_output =
+        duplicate_redirected_standard_handle(STD_OUTPUT_HANDLE);
+    const HANDLE redirected_error =
+        duplicate_redirected_standard_handle(STD_ERROR_HANDLE);
+
     if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
         const DWORD error = GetLastError();
         const bool has_existing_stream =
-            valid_standard_handle(STD_INPUT_HANDLE) ||
-            valid_standard_handle(STD_OUTPUT_HANDLE) ||
-            valid_standard_handle(STD_ERROR_HANDLE);
+            redirected_input != nullptr || redirected_output != nullptr ||
+            redirected_error != nullptr ||
+            valid_handle(GetStdHandle(STD_INPUT_HANDLE)) ||
+            valid_handle(GetStdHandle(STD_OUTPUT_HANDLE)) ||
+            valid_handle(GetStdHandle(STD_ERROR_HANDLE));
         if (error != ERROR_ACCESS_DENIED && !has_existing_stream) {
             AllocConsole();
         }
     }
 
+    if (redirected_input != nullptr) {
+        SetStdHandle(STD_INPUT_HANDLE, redirected_input);
+    }
+    if (redirected_output != nullptr) {
+        SetStdHandle(STD_OUTPUT_HANDLE, redirected_output);
+    }
+    if (redirected_error != nullptr) {
+        SetStdHandle(STD_ERROR_HANDLE, redirected_error);
+    }
+
     SetConsoleCP(CP_UTF8);
     SetConsoleOutputCP(CP_UTF8);
-    bind_crt_stream(stdin, STD_INPUT_HANDLE, _O_RDONLY | _O_TEXT);
-    bind_crt_stream(stdout, STD_OUTPUT_HANDLE, _O_WRONLY | _O_TEXT);
+    bind_crt_stream(stdin, STD_INPUT_HANDLE, _O_RDONLY | _O_BINARY);
+    bind_crt_stream(stdout, STD_OUTPUT_HANDLE, _O_WRONLY | _O_BINARY);
     bind_crt_stream(stderr, STD_ERROR_HANDLE, _O_WRONLY | _O_TEXT);
+    _setmode(_fileno(stdin), _O_BINARY);
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_TEXT);
     std::ios::sync_with_stdio(true);
     std::cin.clear();
     std::cout.clear();

@@ -37,6 +37,7 @@ std::vector<std::uint8_t> bytes_from_text(std::string_view value);
 CheatDocument one_entry_document(const CheatEntry& entry);
 std::vector<std::string> code_lines(std::string_view output, bool want8x8);
 std::optional<Lines8x4> exact_fcd(const CheatEntry& entry);
+std::optional<Lines8x8> exact_gameshark(const CheatEntry& entry, bool encrypted);
 std::optional<Lines8x8> exact_armax(const CheatEntry& entry, bool encrypted);
 std::string format_8x4(const Lines8x4& lines);
 std::string format_8x8(const Lines8x8& lines);
@@ -55,6 +56,7 @@ Result export_libretro(const CheatDocument& document);
 Result export_mednafen(const CheatDocument& document, const Options& options);
 Result export_armax_dsc(const CheatDocument& document, const Options& options);
 Result export_vba_clt(const CheatDocument& document);
+Result export_mister_gg(const CheatDocument& document);
 Result export_mister(const CheatDocument& document);
 
 } // namespace gba::output_modes::detail

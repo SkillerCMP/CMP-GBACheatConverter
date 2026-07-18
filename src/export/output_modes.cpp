@@ -14,6 +14,8 @@ Result export_document(const CheatDocument& document,
         return detail::export_vba_clt(document);
     case Format::MyBoyCht:
         return detail::export_myboy(document);
+    case Format::MisterGg:
+        return detail::export_mister_gg(document);
     case Format::MisterZip:
         return detail::export_mister(document);
     case Format::MednafenCht:

@@ -1,4 +1,4 @@
-# Device ROM and EZ-Flash code-type audit — v2.00
+# Device ROM and EZ-Flash code-type audit — v2.06
 
 This audit was performed against the five locally supplied device ROM images.
 The ROM images are not distributed with the converter.
@@ -22,9 +22,9 @@ Both devices use the same semantic 0-F family table:
 | A | 16-bit not-equal condition | Exact |
 | B | Unsigned greater-than condition | Exact; unsigned hint retained |
 | C | Unsigned less-than condition | Exact; unsigned hint retained |
-| D | Special operation; address 0x20 is device button/KEYINPUT NAND | Exact known form; others unsupported |
+| D | Special operation; address 0x20 is a masked GBA KEYINPUT equality against zero | Exact known form; others unsupported |
 | E | 16-bit add | Exact; subtraction represented by two's complement |
-| F | 16-bit bit-mask/AND condition | Exact |
+| F | 16-bit masked not-equal-zero condition | Exact |
 
 No missing FCD dispatcher family was found in the current semantic model.
 
@@ -94,35 +94,40 @@ AR MAX strict comparison has no exact FCD equivalent and is suppressed together
 with its controlled writes.
 
 
-## EZ-Flash Omega DE Enhanced 1.06E3
+## EZ-Flash Omega DE Enhanced 1.06E7
 
-The Enhanced kernel source confirms a text-driven runtime and pre-launch ROM
-patch model rather than an encrypted cartridge code stream. The converter
-implements the following verified commands:
+The E7 source implements `.cht` format revision 6. Every visible code is a
+`CodeName=commands;` row. Rows before the first heading are standalone independent
+toggles. Plain `[Group]` headings are multi-select. `[Group|ONE]` permits zero or
+one selected sibling; the suffix must be exact uppercase `|ONE`, counts toward
+the 49-byte physical heading limit, and is removed from the visible menu name.
 
-| Command | Verified behavior |
-|---|---|
-| `ON=` / `ON:` | Arbitrary-length little-endian byte writes to EWRAM/IWRAM. |
-| `IF=` | Byte-array equality; multiple discontiguous terms form one logical AND group. |
-| `IFNE=` | Byte-array not-equal comparison. |
-| `IFLT=` / `IFGT=` | Unsigned ordered byte-array comparisons. |
-| `IFLE=` / `IFGE=` | Unsigned inclusive ordered byte-array comparisons. |
-| `ELSE` / `ENDIF` | Explicit true/false runtime block structure. |
-| `ADD=` / `SUB=` | Arbitrary-width little-endian arithmetic with carry/borrow across all bytes. |
-| `PTR=` | One-level pointer write using a 32-bit pointer, signed 32-bit offset, and byte payload. |
-| `FILL=` | Transactional repeated pattern expansion. |
-| `SLIDE=` | Transactional count/address-step/value-step expansion. |
-| `ROM=` | Pre-launch Game Pak ROM image patch bytes. |
-| `ROMIF=` | Pre-launch ROM byte-array equality guard for mixed RAM/ROM entries. |
+| Command | Verified behavior | Runtime records |
+|---|---|---:|
+| `W8`, `W16`, `W32` | Exact width-aware EWRAM/IWRAM write | 1 |
+| `IF`, `IFNE`, `IFLT`, `IFGT`, `IFLE`, `IFGE` | Width-aware unsigned comparison | 1 |
+| masked `IF*M` forms | Masked width-aware comparison | 2 |
+| `ELSE`, `ENDIF` | Nested runtime block control | 1 |
+| `ADD`, `SUB` | Width-aware arithmetic | 1 |
+| `PTR` | One-level pointer plus signed 32-bit offset | 2 |
+| `FILL` | Compact repeated constant-width write | 2 |
+| `SLIDE` | Compact address/value progression | 4 |
+| `ROMIF`, `ROM` | Pre-launch ROM guard/patch bytes | 0 |
 
-Enhanced 1.06E3 retains the compact address map for EWRAM, IWRAM, and read-only
-I/O conditions. ROM commands use full Game Pak addresses. Runtime commands
-share one 128-record table; ROM and ROMIF bytes use separate pre-launch tables.
-The converter also enforces the verified 49-byte section-name and 298-visible-
-character physical-row limits. Malformed or overflowing dependent entries are
-rolled back as complete units.
+The compact address map covers EWRAM, IWRAM, and condition-only I/O. The
+converter canonicalizes all `02xxxxxx` EWRAM and `03xxxxxx` IWRAM mirrors before
+emitting compact addresses. Width-aware accesses must be aligned and remain
+inside one region. ROM guards must precede runtime actions, and ROM patches
+cannot be placed inside a runtime IF branch.
+
+The selected rows share a 128-record table and a 4,096-write-per-pass safety
+budget. Capacity sums every standalone row and every sibling in plain groups,
+because all may be selected together. Each `|ONE` group contributes only its
+largest sibling. FILL and SLIDE consume fixed record counts while their
+repetition counts contribute to the work budget. Malformed or overflowing rows
+roll back transactionally.
 
 CodeBreaker/Xploder slides, compatible GameShark arithmetic/comparisons, and
 compatible AR MAX comparisons, block ELSE, pointer, fill/slide, and ROM forms
-map to Enhanced commands only when the behavior is exact. Device-only slowdown,
-hook/master, interception, and unsupported nested semantics remain suppressed.
+map to E7 only when exact. Device-only slowdown, hook/master, interception, and
+unsupported dependency structures remain suppressed.

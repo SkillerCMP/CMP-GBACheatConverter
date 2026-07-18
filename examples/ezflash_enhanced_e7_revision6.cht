@@ -1,0 +1,32 @@
+# Omega DE Kernel 1.06 Enhanced format revision 6 examples
+
+moonjump=IFM:W16,80130,0001,0000;W8:1505C,80;ENDIF;
+infinitehealth=W16:10A78,0064;
+
+[Independent Movement Codes]
+Walk Through Walls=W8:15060,01;
+Fast Movement=ADD:W16,15062,0001;
+
+[Starting Lives|ONE]
+1 Life=W8:15070,01;
+3 Lives=W8:15070,03;
+9 Lives=W8:15070,09;
+
+[Width Writes]
+Byte Write=W8:10A78,7F;
+Halfword Write=W16:10A7A,1234;
+Word Write=W32:10A7C,89ABCDEF;
+
+[Conditional Codes]
+Nested=IF:W8,100,01;IFGE:W16,102,0010;W8:200,7F;ENDIF;ENDIF;
+Masked Not Equal=IFNEM:W16,100,00FF,0001;W8:200,02;ENDIF;
+
+[Compact Operations]
+Fill=FILL:W32,10000,00000100,11223344;
+Slide=SLIDE:W16,20000,00000100,00000002,00000001,1234;
+
+[ROM Codes]
+Safe Patch=ROMIF:09014CD3,FD,00;W8:239F8,04;ROM:080EA0C0,00,20;
+
+[Stock Original]
+Original Byte List=10A78,64,00;

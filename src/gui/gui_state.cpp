@@ -31,6 +31,9 @@ HMENU g_ezflash_menu = nullptr;
 HMENU g_save_output_as_menu = nullptr;
 
 bool g_auto_convert = false;
+bool g_cmp_output = false;
+bool g_input_word_wrap = false;
+bool g_output_word_wrap = false;
 GuiFormat g_input_format = GuiFormat::AutoDetect;
 GuiFormat g_output_format = GuiFormat::EzFlash;
 gba::ezflash::Mode g_ezflash_mode = gba::ezflash::Mode::Enhanced;

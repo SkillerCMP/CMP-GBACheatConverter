@@ -164,7 +164,7 @@ std::optional<std::vector<ParsedRun>> parse_rom_run(
     if (!canonical) {
         warnings.push_back(
             "EZ-Flash line " + std::to_string(line_number) +
-            ": ROM address is outside the Enhanced v3 image ranges");
+            ": ROM address is outside the Enhanced E7 image ranges");
         return std::nullopt;
     }
 

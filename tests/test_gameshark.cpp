@@ -348,9 +348,9 @@ void test_gameshark_inclusive_conditions_do_not_leak() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success &&
-            ez.text.find("IFLE=14,BC,9A;ON=104,33;") != std::string::npos &&
-            ez.text.find("IFGE=16,F0,DE;ON=106,44,44;") != std::string::npos,
-            "Inclusive GameShark conditions did not map to Enhanced v3");
+            ez.text.find("=IFLE:W16,14,9ABC;W8:104,33;ENDIF;") != std::string::npos &&
+            ez.text.find("IFGE:W16,16,DEF0;W16:106,4444;ENDIF;") != std::string::npos,
+            "Inclusive GameShark conditions did not map to Enhanced v4");
 }
 
 void test_gameshark_rom_patch_roundtrip() {
@@ -423,7 +423,7 @@ void test_gameshark_rom_patch_dependency_safety() {
     const auto enhanced =
         gba::ezflash::export_document(document, enhanced_options);
     require(enhanced.success &&
-            enhanced.text.find("ON=100,78;ROM:0802468A,CD,AB;") !=
+            enhanced.text.find("=ROM:0802468A,CD,AB;W8:100,78;") !=
                 std::string::npos,
             "GameShark mode-0 ROM patch did not convert to Enhanced .cht");
 
@@ -576,10 +576,10 @@ void test_gameshark_assignment_list_cross_family_expansion() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success &&
-            ez.text.find("ON=4000,00,40,00,02;") != std::string::npos &&
-            ez.text.find("1000,00,40,00,02;") != std::string::npos &&
-            ez.text.find("2000,00,40,00,02;") != std::string::npos &&
-            ez.text.find("3000,00,40,00,02;") != std::string::npos,
+            ez.text.find("=W32:4000,02004000;") != std::string::npos &&
+            ez.text.find("W32:1000,02004000;") != std::string::npos &&
+            ez.text.find("W32:2000,02004000;") != std::string::npos &&
+            ez.text.find("W32:3000,02004000;") != std::string::npos,
             "GameShark assignment list did not expand safely to EZ-Flash");
 }
 
@@ -614,9 +614,9 @@ void test_gameshark_multiline_condition_roundtrip() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success &&
-            ez.text.find("IF=10,34,12;ON=") != std::string::npos &&
-            ez.text.find("4000,00,40,00,02;") != std::string::npos &&
-            ez.text.find("3000,00,40,00,02;") != std::string::npos,
+            ez.text.find("=IF:W16,10,1234;") != std::string::npos &&
+            ez.text.find("W32:4000,02004000;") != std::string::npos &&
+            ez.text.find("W32:3000,02004000;") != std::string::npos,
             "GameShark multiline condition did not preserve its full EZ scope");
 }
 

@@ -1,0 +1,15 @@
+!Access:
+$82001000 0001
+
+!Menus:
+$82001002 0002
+
++Birch's Bag
+%Credits: Skiller
+$32001004 0063
+
++Fly Map
+%Credits: Skiller
+$32001005 0001
+!!
+!!

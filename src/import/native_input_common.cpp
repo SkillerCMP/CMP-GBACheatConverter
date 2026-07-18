@@ -312,6 +312,16 @@ Result finish_entries(SourceFormat source_format,
             out << normalized_entry_text(entries[index]);
         }
         result.text = out.str();
+        for (const NativeEntry& entry : entries) {
+            CheatDocument parsed = parse_entry(entry);
+            result.document.warnings.insert(result.document.warnings.end(),
+                                            parsed.warnings.begin(),
+                                            parsed.warnings.end());
+            for (CheatEntry& parsed_entry : parsed.entries) {
+                result.document.entries.push_back(std::move(parsed_entry));
+            }
+        }
+        result.has_document = !result.document.entries.empty();
         return result;
     }
 
@@ -347,6 +357,8 @@ Result render_document(SourceFormat source_format,
             result.input_format = format;
             result.source_name = std::move(source_name);
             result.text = *rendered;
+            result.document = document;
+            result.has_document = true;
             return result;
         }
     }

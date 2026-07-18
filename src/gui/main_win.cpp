@@ -21,59 +21,6 @@ std::vector<std::string> command_line_arguments() {
     return arguments;
 }
 
-bool valid_standard_handle(DWORD standard_handle) {
-    const HANDLE handle = GetStdHandle(standard_handle);
-    return handle != nullptr && handle != INVALID_HANDLE_VALUE;
-}
-
-bool bind_crt_stream(FILE* stream, DWORD standard_handle, int open_flags) {
-    const HANDLE source = GetStdHandle(standard_handle);
-    if (source == nullptr || source == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-
-    HANDLE duplicate = nullptr;
-    if (!DuplicateHandle(GetCurrentProcess(), source,
-                         GetCurrentProcess(), &duplicate,
-                         0, TRUE, DUPLICATE_SAME_ACCESS)) {
-        return false;
-    }
-
-    const int descriptor = _open_osfhandle(
-        reinterpret_cast<std::intptr_t>(duplicate), open_flags);
-    if (descriptor == -1) {
-        CloseHandle(duplicate);
-        return false;
-    }
-
-    const bool success = _dup2(descriptor, _fileno(stream)) == 0;
-    _close(descriptor);
-    return success;
-}
-
-void prepare_cli_standard_streams() {
-    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
-        const DWORD error = GetLastError();
-        const bool has_existing_stream =
-            valid_standard_handle(STD_INPUT_HANDLE) ||
-            valid_standard_handle(STD_OUTPUT_HANDLE) ||
-            valid_standard_handle(STD_ERROR_HANDLE);
-        if (error != ERROR_ACCESS_DENIED && !has_existing_stream) {
-            AllocConsole();
-        }
-    }
-
-    SetConsoleCP(CP_UTF8);
-    SetConsoleOutputCP(CP_UTF8);
-    bind_crt_stream(stdin, STD_INPUT_HANDLE, _O_RDONLY | _O_TEXT);
-    bind_crt_stream(stdout, STD_OUTPUT_HANDLE, _O_WRONLY | _O_TEXT);
-    bind_crt_stream(stderr, STD_ERROR_HANDLE, _O_WRONLY | _O_TEXT);
-    std::ios::sync_with_stdio(true);
-    std::cin.clear();
-    std::cout.clear();
-    std::cerr.clear();
-}
-
 } // namespace
 
 namespace gba::gui {
@@ -216,6 +163,13 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show_command) {
     }
     if (!arguments.empty()) {
         prepare_cli_standard_streams();
+        if (_isatty(_fileno(stdout)) &&
+            gba::cli::would_write_binary_to_stdout(arguments)) {
+            std::cerr
+                << "error: Binary output cannot be printed to the console. "
+                   "Use --output FILE or redirect stdout with > FILE.\n";
+            return 2;
+        }
         const int result = gba::cli::run(
             arguments, std::cin, std::cout, std::cerr,
             "GbaCheatConverter.exe");

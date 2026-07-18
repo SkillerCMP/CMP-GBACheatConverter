@@ -31,6 +31,7 @@ std::vector<ConditionTerm> make_condition_terms(
 
 
 std::optional<OperationKind> condition_kind_for_key(std::string_view key) {
+    if (!key.empty() && key.back() == 'M') key.remove_suffix(1U);
     if (key == "IF") return OperationKind::IfEqual;
     if (key == "IFNE") return OperationKind::IfNotEqual;
     if (key == "IFLT") return OperationKind::IfLess;
@@ -38,6 +39,11 @@ std::optional<OperationKind> condition_kind_for_key(std::string_view key) {
     if (key == "IFLE") return OperationKind::IfLessOrEqual;
     if (key == "IFGE") return OperationKind::IfGreaterOrEqual;
     return std::nullopt;
+}
+
+bool condition_key_is_masked(std::string_view key) {
+    return !key.empty() && key.back() == 'M' &&
+           condition_kind_for_key(key).has_value();
 }
 
 } // namespace gba::ezflash::parse_detail

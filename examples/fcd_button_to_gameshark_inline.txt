@@ -1,6 +1,6 @@
 
 [FCD Button Activator]
 // Conversion Note: Line 2: bit-mask/button condition is not yet encoded
-// Source: D0000020 FFFE
+// Source: D0000020 0001
 
 // Conversion Summary: 1 inline note(s); output may be partial.

@@ -218,8 +218,11 @@ void sync_input_seed_from_text(bool announce_detection) {
     }
 
     SendMessageW(g_input_seed_edit, EM_SETREADONLY, TRUE, 0);
+    const std::string cleaned = current_cleaned_input();
+    const gba::cmp::NormalizedInput cmp_input =
+        gba::cmp::normalize_input(cleaned);
     const auto embedded = gba::codebreaker::find_embedded_seed(
-        current_cleaned_input());
+        cmp_input.recognized ? cmp_input.text : cleaned);
     if (embedded) {
         const std::wstring formatted = format_seed_wide(*embedded);
         const bool changed =
@@ -285,6 +288,22 @@ void select_output_format(GuiFormat format) {
 void update_auto_convert_menu() {
     CheckMenuItem(g_main_menu, ID_OPTIONS_AUTO_CONVERT,
                   MF_BYCOMMAND | (g_auto_convert ? MF_CHECKED : MF_UNCHECKED));
+}
+
+void update_cmp_output_menu() {
+    CheckMenuItem(g_main_menu, ID_OPTIONS_CMP_OUTPUT,
+                  MF_BYCOMMAND | (g_cmp_output ? MF_CHECKED : MF_UNCHECKED));
+}
+
+void update_word_wrap_menus() {
+    CheckMenuItem(
+        g_main_menu, ID_EDIT_INPUT_WORD_WRAP,
+        MF_BYCOMMAND |
+            (g_input_word_wrap ? MF_CHECKED : MF_UNCHECKED));
+    CheckMenuItem(
+        g_main_menu, ID_EDIT_OUTPUT_WORD_WRAP,
+        MF_BYCOMMAND |
+            (g_output_word_wrap ? MF_CHECKED : MF_UNCHECKED));
 }
 
 void update_ezflash_mode_menu() {

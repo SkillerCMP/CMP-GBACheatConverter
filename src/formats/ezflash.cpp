@@ -16,7 +16,7 @@ using namespace detail;
 
 Result export_document(const CheatDocument& document, const Options& options) {
     if (options.mode == Mode::Enhanced) {
-        return export_enhanced_v3(document, options);
+        return export_enhanced_v4(document, options);
     }
 
     Result result;
@@ -41,17 +41,17 @@ Result export_document(const CheatDocument& document, const Options& options) {
 
     if (options.maximum_runtime_records > kEnhancedRuntimeRecordLimit) {
         result.warnings.push_back(
-            "EZ-Flash Enhanced v3 retains the hard 128-record runtime "
+            "EZ-Flash Enhanced E7 retains the hard 128-record runtime "
             "table; the requested larger limit was clamped to 128");
     }
     if (options.maximum_section_name_length > kEnhancedSectionNameLimit) {
         result.warnings.push_back(
-            "EZ-Flash Enhanced v3 section names are limited to 49 bytes; "
+            "EZ-Flash Enhanced E7 section names are limited to 49 bytes; "
             "the requested larger limit was clamped");
     }
     if (options.maximum_physical_line_length > kEnhancedPhysicalLineLimit) {
         result.warnings.push_back(
-            "EZ-Flash Enhanced v3 menu lines are limited to 298 visible "
+            "EZ-Flash Enhanced E7 menu lines are limited to 298 visible "
             "characters; the requested larger limit was clamped");
     }
 
@@ -78,7 +78,7 @@ Result export_document(const CheatDocument& document, const Options& options) {
             result.warnings.push_back(
                 entry.name + ": requires " +
                 std::to_string(required_records) +
-                " EZ runtime records, but Enhanced v3 can activate at most " +
+                " EZ runtime records, but Enhanced E7 can activate at most " +
                 std::to_string(runtime_limit) +
                 "; the complete entry was not exported");
             result.success = false;
@@ -175,7 +175,7 @@ Result export_document(const CheatDocument& document, const Options& options) {
 
     if (total_exported_records > kEnhancedRuntimeRecordLimit) {
         result.warnings.push_back(
-            "EZ-Flash Enhanced v3 uses one shared 128-record table for runtime operations "
+            "EZ-Flash Enhanced E7 uses one shared 128-record table for runtime operations "
             "for all enabled menu entries. Enabling every exported entry "
             "together would require " +
             std::to_string(total_exported_records) +

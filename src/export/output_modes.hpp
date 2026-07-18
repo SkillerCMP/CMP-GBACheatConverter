@@ -13,6 +13,7 @@ enum class Format {
     ArmaxDsc,
     VisualBoyAdvanceClt,
     MyBoyCht,
+    MisterGg,
     MisterZip,
     MednafenCht,
     MgbaCheats,

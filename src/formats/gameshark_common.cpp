@@ -86,6 +86,10 @@ bool is_condition_kind(OperationKind kind) {
     case OperationKind::IfLessOrEqual:
     case OperationKind::IfAnd:
     case OperationKind::IfNand:
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
     case OperationKind::IfDeviceButton:
         return true;
     default:

@@ -188,9 +188,9 @@ void test_armax_pointer_cross_family_safety() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success &&
-            ez.text.find("PTR=10,00000123,7F;") != std::string::npos &&
-            ez.text.find("ON:40,34,12;") != std::string::npos,
-            "AR MAX pointer did not map to Enhanced v3 PTR");
+            ez.text.find("PTR:W8,10,00000123,7F;") != std::string::npos &&
+            ez.text.find("W16:40,1234;") != std::string::npos,
+            "AR MAX pointer did not map to Enhanced v4 PTR");
 }
 
 void test_armax_deadface_across_entries() {
@@ -384,11 +384,11 @@ void test_armax_block_else_cross_family_safety() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success &&
-            ez.text.find("IF=10,34,12;ON=100,11,11,11,11;") !=
+            ez.text.find("=IF:W16,10,1234;W32:100,11111111;") !=
                 std::string::npos &&
-            ez.text.find("ELSE;ON:104,22,22,22,22;ENDIF;") !=
+            ez.text.find("ELSE;W32:104,22222222;ENDIF;") !=
                 std::string::npos,
-            "AR MAX ELSE block did not map to Enhanced v3");
+            "AR MAX ELSE block did not map to Enhanced v4");
 }
 
 void test_armax_block_without_else_to_ez() {
@@ -402,8 +402,8 @@ void test_armax_block_without_else_to_ez() {
     const auto document = gba::armax::parse(raw, {false});
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success &&
-            ez.text.find("IF=10,34,12;") != std::string::npos &&
-            ez.text.find("ON=100,11,11,11,11,22,22,33;") !=
+            ez.text.find("=IF:W16,10,1234;") != std::string::npos &&
+            ez.text.find("W32:100,11111111;W16:104,2222;W8:106,33;ENDIF;") !=
                 std::string::npos,
             "AR MAX block without ELSE did not convert to one EZ IF group");
 }

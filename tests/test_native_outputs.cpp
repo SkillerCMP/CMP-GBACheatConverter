@@ -86,14 +86,14 @@ void test_native_output_modes() {
         const std::string text = as_string(result);
         require(result.success && result.exported_entries == 3U,
                 "EZ-Flash Enhanced native export failed");
-        require(text.find("ON=") != std::string::npos &&
-                text.find("IF=") != std::string::npos &&
-                text.find("ROM=") != std::string::npos,
-                "EZ-Flash Enhanced native output lost IF or ROM operations");
-        require(text.find("[Direct Writes]") != std::string::npos &&
-                text.find("[Conditional Write]") != std::string::npos &&
-                text.find("[AR Patch]") != std::string::npos,
-                "EZ-Flash Enhanced native output lost cheat names");
+        require(text.find("Direct Writes=") != std::string::npos &&
+                text.find("Conditional Write=IF:") != std::string::npos &&
+                text.find("AR Patch=ROM:") != std::string::npos,
+                "EZ-Flash E7 native output lost names, IF, or ROM operations");
+        require(text.find("[Direct Writes]") == std::string::npos &&
+                text.find("[Conditional Write]") == std::string::npos &&
+                text.find("[AR Patch]") == std::string::npos,
+                "Ungrouped EZ-Flash E7 cheats were incorrectly wrapped in groups");
         const auto reparsed = gba::ezflash::parse(text);
         require(std::any_of(
                     reparsed.entries.begin(), reparsed.entries.end(),
@@ -144,20 +144,22 @@ void test_native_output_modes() {
             document, gba::output_modes::Format::MednafenCht, options);
         const std::string text = as_string(result);
         require(result.success && result.exported_entries == 1U,
-                "Mednafen direct-write export failed");
+                "Mednafen conditioned export failed");
         require(text.find("[0123456789abcdef0123456789abcdef] Test Game") !=
                     std::string::npos,
                 "Mednafen header is incorrect");
-        require(text.find("Conditional Write") == std::string::npos,
-                "Mednafen leaked a conditioned write");
+        require(text.find("Conditional Write") != std::string::npos &&
+                text.find("1 L 0x02002000 == 0x01") != std::string::npos,
+                "Mednafen conditioned write was not exported");
         require(!result.warnings.empty(),
-                "Mednafen did not warn about omitted conditions");
+                "Mednafen did not warn about the unsupported patch entry");
     }
     {
         const auto result = gba::output_modes::export_document(
             document, gba::output_modes::Format::VisualBoyAdvanceClt);
-        require(result.success && result.data.size() == 8012U,
-                "VisualBoy Advance .clt size is incorrect");
+        require(result.success && result.data.size() == 684U &&
+                result.exported_records == 8U,
+                "VisualBoy Advance-M .clt size is incorrect");
         const auto read_u32 = [&](std::size_t offset) {
             return static_cast<std::uint32_t>(result.data[offset]) |
                    (static_cast<std::uint32_t>(result.data[offset + 1U]) << 8U) |
@@ -165,10 +167,10 @@ void test_native_output_modes() {
                    (static_cast<std::uint32_t>(result.data[offset + 3U]) << 24U);
         };
         require(read_u32(0U) == 1U && read_u32(4U) == 1U &&
-                read_u32(8U) == 3U,
-                "VisualBoy Advance .clt header is incorrect");
-        require(!result.warnings.empty(),
-                "VisualBoy Advance did not warn about omitted conditions");
+                read_u32(8U) == 8U,
+                "VisualBoy Advance-M .clt header is incorrect");
+        require(result.warnings.empty(),
+                "VisualBoy Advance-M unexpectedly omitted supported records");
     }
     {
         gba::output_modes::Options options;

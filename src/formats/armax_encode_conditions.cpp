@@ -57,6 +57,13 @@ bool EntryEncoder::encode_range(
                 "Action Replay MAX mapping");
             return false;
         }
+        if (operation.condition_has_mask) {
+            destination.resize(original_size);
+            unsupported(
+                operation,
+                "masked condition has no exact Action Replay MAX mapping");
+            return false;
+        }
 
         std::vector<EncodedLine> group;
         if (operation.kind == OperationKind::IfDeviceButton) {

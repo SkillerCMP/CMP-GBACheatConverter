@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -13,6 +14,430 @@
 #include <vector>
 
 namespace gba::ezflash::detail {
+namespace {
+
+std::string_view width_name(std::uint8_t width) {
+    switch (width) {
+    case 1U: return "W8";
+    case 2U: return "W16";
+    case 4U: return "W32";
+    default: return {};
+    }
+}
+
+std::uint32_t width_mask(std::uint8_t width) {
+    if (width == 1U) return 0xFFU;
+    if (width == 2U) return 0xFFFFU;
+    return 0xFFFFFFFFU;
+}
+
+std::string scalar_value(std::uint32_t value, std::uint8_t width) {
+    return text::hex(value & width_mask(width), width * 2U);
+}
+
+bool aligned(std::uint32_t address, std::uint8_t width) {
+    return (width == 1U) ||
+           (width == 2U && (address & 1U) == 0U) ||
+           (width == 4U && (address & 3U) == 0U);
+}
+
+std::vector<ConditionTerm> all_condition_terms(const Operation& operation) {
+    std::vector<ConditionTerm> terms;
+    terms.push_back(ConditionTerm{
+        operation.address, operation.value, operation.width});
+    terms.insert(terms.end(), operation.condition_terms.begin(),
+                 operation.condition_terms.end());
+    return terms;
+}
+
+bool operation_is_rom_condition(const Operation& operation) {
+    if (operation.condition_has_mask) return false;
+    const auto terms = all_condition_terms(operation);
+    return !terms.empty() &&
+           std::all_of(terms.begin(), terms.end(), [](const ConditionTerm& term) {
+               return is_rom_address(term.address);
+           });
+}
+
+std::optional<std::string> encode_scalar_write(
+    std::uint32_t address,
+    std::uint32_t value,
+    std::uint8_t width,
+    std::string_view entry_name,
+    std::vector<std::string>& warnings) {
+    const auto compact = compact_write_address(address);
+    const std::string_view width_token = width_name(width);
+    if (!compact || width_token.empty() || !aligned(address, width)) {
+        warnings.push_back(std::string(entry_name) +
+            ": EZ-Flash Enhanced E7 cannot encode width-aware write at " +
+            text::hex(address, 8));
+        return std::nullopt;
+    }
+    return std::string(width_token) + ':' + text::hex(*compact, 1) + ',' +
+           scalar_value(value, width) + ';';
+}
+
+bool append_payload_writes(const Operation& operation,
+                           EnhancedEncodedOption& encoded,
+                           std::vector<std::string>& warnings,
+                           std::string_view entry_name) {
+    std::vector<std::uint8_t> bytes = operation_payload(operation);
+    if (bytes.empty()) {
+        warnings.push_back(std::string(entry_name) +
+            ": EZ-Flash Enhanced E7 write has no representable payload");
+        return false;
+    }
+
+    std::size_t offset = 0U;
+    while (offset < bytes.size()) {
+        const std::uint32_t address = operation.address +
+            static_cast<std::uint32_t>(offset);
+        const std::size_t remaining = bytes.size() - offset;
+        std::uint8_t width = 1U;
+        if (remaining >= 4U && aligned(address, 4U)) {
+            width = 4U;
+        } else if (remaining >= 2U && aligned(address, 2U)) {
+            width = 2U;
+        }
+        std::uint32_t value = 0U;
+        for (std::uint8_t index = 0U; index < width; ++index) {
+            value |= static_cast<std::uint32_t>(bytes[offset + index])
+                     << (index * 8U);
+        }
+        const auto command = encode_scalar_write(
+            address, value, width, entry_name, warnings);
+        if (!command) return false;
+        encoded.commands.push_back(*command);
+        ++encoded.runtime_records;
+        ++encoded.runtime_write_work;
+        offset += width;
+    }
+    return true;
+}
+
+bool append_action(const Operation& operation,
+                   EnhancedEncodedOption& encoded,
+                   std::vector<std::string>& warnings,
+                   std::string_view entry_name,
+                   bool inside_runtime_condition) {
+    const std::uint32_t repeat = operation.repeat == 0U ? 1U : operation.repeat;
+
+    if (operation.kind == OperationKind::Write) {
+        const std::vector<std::uint8_t> bytes = operation_payload(operation);
+        if (bytes.empty()) return append_payload_writes(
+            operation, encoded, warnings, entry_name);
+
+        if (repeat == 1U) {
+            return append_payload_writes(operation, encoded, warnings, entry_name);
+        }
+
+        if (bytes.size() != 1U && bytes.size() != 2U && bytes.size() != 4U) {
+            warnings.push_back(std::string(entry_name) +
+                ": repeated Enhanced E7 write requires a W8/W16/W32 payload");
+            return false;
+        }
+        const std::uint8_t width = static_cast<std::uint8_t>(bytes.size());
+        const auto compact = compact_write_address(operation.address);
+        if (!compact || !aligned(operation.address, width)) {
+            warnings.push_back(std::string(entry_name) +
+                ": repeated Enhanced E7 write address is not representable");
+            return false;
+        }
+        std::uint32_t value = 0U;
+        for (std::uint8_t index = 0U; index < width; ++index) {
+            value |= static_cast<std::uint32_t>(bytes[index]) << (index * 8U);
+        }
+        const std::int32_t address_step = operation.address_step == 0
+            ? static_cast<std::int32_t>(width)
+            : operation.address_step;
+        const bool fill = operation.value_step == 0 &&
+            address_step == static_cast<std::int32_t>(width);
+        std::ostringstream command;
+        command << (fill ? "FILL:" : "SLIDE:") << width_name(width) << ','
+                << text::hex(*compact, 1) << ',' << text::hex(repeat, 8);
+        if (!fill) {
+            command << ',' << text::hex(
+                static_cast<std::uint32_t>(address_step), 8)
+                    << ',' << text::hex(
+                static_cast<std::uint32_t>(operation.value_step), 8);
+        }
+        command << ',' << scalar_value(value, width) << ';';
+        encoded.commands.push_back(command.str());
+        encoded.runtime_records += fill ? 2U : 4U;
+        encoded.runtime_write_work += repeat;
+        return true;
+    }
+
+    if (operation.kind == OperationKind::Add ||
+        operation.kind == OperationKind::Subtract) {
+        const std::vector<std::uint8_t> bytes = operation_payload(operation);
+        if (bytes.size() != 1U && bytes.size() != 2U && bytes.size() != 4U) {
+            warnings.push_back(std::string(entry_name) +
+                ": Enhanced E7 ADD/SUB requires a W8/W16/W32 value");
+            return false;
+        }
+        const std::uint8_t width = static_cast<std::uint8_t>(bytes.size());
+        const auto compact = compact_write_address(operation.address);
+        if (!compact || !aligned(operation.address, width)) {
+            warnings.push_back(std::string(entry_name) +
+                ": Enhanced E7 arithmetic address is not representable");
+            return false;
+        }
+        std::uint32_t value = 0U;
+        for (std::uint8_t index = 0U; index < width; ++index) {
+            value |= static_cast<std::uint32_t>(bytes[index]) << (index * 8U);
+        }
+        encoded.commands.push_back(
+            std::string(operation.kind == OperationKind::Add ? "ADD:" : "SUB:") +
+            std::string(width_name(width)) + ',' + text::hex(*compact, 1) + ',' +
+            scalar_value(value, width) + ';');
+        ++encoded.runtime_records;
+        ++encoded.runtime_write_work;
+        return true;
+    }
+
+    if (operation.kind == OperationKind::PointerWrite) {
+        const std::vector<std::uint8_t> bytes = operation_payload(operation);
+        if (bytes.size() != 1U && bytes.size() != 2U && bytes.size() != 4U) {
+            warnings.push_back(std::string(entry_name) +
+                ": Enhanced E7 PTR requires a W8/W16/W32 payload");
+            return false;
+        }
+        const std::uint8_t width = static_cast<std::uint8_t>(bytes.size());
+        const auto compact = compact_write_address(operation.address);
+        if (!compact || (operation.address & 3U) != 0U) {
+            warnings.push_back(std::string(entry_name) +
+                ": Enhanced E7 pointer base is not representable");
+            return false;
+        }
+        std::uint32_t value = 0U;
+        for (std::uint8_t index = 0U; index < width; ++index) {
+            value |= static_cast<std::uint32_t>(bytes[index]) << (index * 8U);
+        }
+        encoded.commands.push_back(
+            "PTR:" + std::string(width_name(width)) + ',' +
+            text::hex(*compact, 1) + ',' + text::hex(operation.pointer_offset, 8) +
+            ',' + scalar_value(value, width) + ';');
+        encoded.runtime_records += 2U;
+        ++encoded.runtime_write_work;
+        return true;
+    }
+
+    if (operation.kind == OperationKind::RomPatch &&
+        rom_patch_is_direct_image_write(operation)) {
+        if (inside_runtime_condition) {
+            warnings.push_back(std::string(entry_name) +
+                ": ROM patches cannot be controlled by a runtime IF branch");
+            return false;
+        }
+        Operation normalized = operation;
+        const auto canonical = canonical_rom_address(operation.address);
+        if (!canonical) return false;
+        normalized.address = *canonical;
+        std::vector<ByteWrite> bytes;
+        append_expanded_write(bytes, normalized);
+        const auto tokens = emit_rom_byte_run_tokens(bytes, warnings);
+        if (tokens.empty()) return false;
+        for (const std::string& token : tokens) {
+            encoded.commands.push_back("ROM:" + token);
+        }
+        return true;
+    }
+
+    warnings.push_back(std::string(entry_name) +
+        ": operation has no exact EZ-Flash Enhanced E7 representation");
+    return false;
+}
+
+bool append_rom_guards(const Operation& operation,
+                       EnhancedEncodedOption& encoded,
+                       std::vector<std::string>& warnings,
+                       std::string_view entry_name) {
+    std::vector<ByteWrite> bytes;
+    for (const ConditionTerm& term : all_condition_terms(operation)) {
+        if (term.width == 0U || term.width > 4U || !is_rom_address(term.address)) {
+            warnings.push_back(std::string(entry_name) +
+                ": ROMIF condition is not representable");
+            return false;
+        }
+        const auto part = flatten(term.address, term.value, term.width);
+        bytes.insert(bytes.end(), part.begin(), part.end());
+    }
+    const auto tokens = emit_rom_byte_run_tokens(bytes, warnings);
+    if (tokens.empty()) return false;
+    for (const std::string& token : tokens) {
+        encoded.commands.push_back("ROMIF:" + token);
+    }
+    return true;
+}
+
+bool append_runtime_condition_header(
+    const Operation& operation,
+    EnhancedEncodedOption& encoded,
+    std::vector<std::string>& warnings,
+    std::string_view entry_name,
+    std::size_t& condition_count) {
+    const bool logical_mask =
+        operation.kind == OperationKind::IfAnd ||
+        operation.kind == OperationKind::IfNand;
+    const bool masked = operation.condition_has_mask || logical_mask;
+    const std::string_view key = logical_mask
+        ? (operation.kind == OperationKind::IfAnd
+               ? std::string_view("IFNE")
+               : std::string_view("IF"))
+        : condition_key_for_kind(operation.kind);
+    if (key.empty()) {
+        warnings.push_back(std::string(entry_name) +
+            ": condition type has no Enhanced E7 equivalent");
+        return false;
+    }
+
+    const std::vector<ConditionTerm> terms = all_condition_terms(operation);
+    if (terms.empty()) return false;
+    if (masked && terms.size() != 1U) {
+        warnings.push_back(std::string(entry_name) +
+            ": compound masked condition has no exact Enhanced E7 form");
+        return false;
+    }
+    if (terms.size() > 1U && operation.kind != OperationKind::IfEqual) {
+        warnings.push_back(std::string(entry_name) +
+            ": compound non-equality condition has no exact Enhanced E7 form");
+        return false;
+    }
+    if (terms.size() > 1U &&
+        (operation.condition_has_else || operation.condition_else_span != 0U)) {
+        warnings.push_back(std::string(entry_name) +
+            ": compound condition with ELSE has no compact Enhanced E7 form");
+        return false;
+    }
+
+    for (const ConditionTerm& term : terms) {
+        if (term.width != 1U && term.width != 2U && term.width != 4U) {
+            warnings.push_back(std::string(entry_name) +
+                ": runtime condition requires W8/W16/W32 width");
+            return false;
+        }
+        const auto compact = compact_condition_address(term.address);
+        if (!compact || !aligned(term.address, term.width)) {
+            warnings.push_back(std::string(entry_name) +
+                ": runtime condition address is not representable");
+            return false;
+        }
+        const std::uint32_t mask = logical_mask
+            ? term.value : operation.condition_mask;
+        const std::uint32_t comparison_value = logical_mask
+            ? 0U : term.value;
+        std::string command_key(key);
+        if (masked) command_key += 'M';
+        std::string command = command_key + ':' +
+            std::string(width_name(term.width)) + ',' +
+            text::hex(*compact, 1) + ',';
+        if (masked) {
+            command += scalar_value(mask, term.width) + ',';
+        }
+        command += scalar_value(comparison_value, term.width) + ';';
+        encoded.commands.push_back(std::move(command));
+        encoded.runtime_records += masked ? 2U : 1U;
+        ++condition_count;
+    }
+    return true;
+}
+
+bool encode_range(const CheatEntry& entry,
+                  std::size_t first,
+                  std::size_t count,
+                  EnhancedEncodedOption& encoded,
+                  std::vector<std::string>& warnings,
+                  bool inside_runtime_condition) {
+    if (first > entry.operations.size() ||
+        count > entry.operations.size() - first) {
+        warnings.push_back(entry.name +
+            ": condition span exceeds the available operations");
+        return false;
+    }
+
+    const std::size_t end = first + count;
+    std::size_t index = first;
+    while (index < end) {
+        const Operation& operation = entry.operations[index];
+        if (operation.kind == OperationKind::EncryptionSeed ||
+            operation.kind == OperationKind::GameId) {
+            ++index;
+            continue;
+        }
+        if (operation.kind == OperationKind::Hook) {
+            warnings.push_back(entry.name +
+                ": hook/master dependency cannot be represented by EZ-Flash");
+            return false;
+        }
+
+        if (!is_condition(operation.kind)) {
+            if (!append_action(operation, encoded, warnings, entry.name,
+                               inside_runtime_condition)) {
+                return false;
+            }
+            ++index;
+            continue;
+        }
+
+        const std::size_t true_span = operation.condition_span == 0U
+            ? 1U : static_cast<std::size_t>(operation.condition_span);
+        const std::size_t false_span =
+            static_cast<std::size_t>(operation.condition_else_span);
+        const std::size_t controlled = true_span + false_span;
+        if (controlled == 0U || controlled > end - index - 1U) {
+            warnings.push_back(entry.name +
+                ": condition does not contain all controlled operations");
+            return false;
+        }
+
+        if (operation_is_rom_condition(operation)) {
+            if (operation.kind != OperationKind::IfEqual ||
+                operation.condition_has_else || false_span != 0U) {
+                warnings.push_back(entry.name +
+                    ": ROMIF supports equality without ELSE only");
+                return false;
+            }
+            if (!append_rom_guards(operation, encoded, warnings, entry.name) ||
+                !encode_range(entry, index + 1U, true_span,
+                              encoded, warnings, false)) {
+                return false;
+            }
+            index += 1U + controlled;
+            continue;
+        }
+
+        std::size_t condition_count = 0U;
+        if (!append_runtime_condition_header(
+                operation, encoded, warnings, entry.name, condition_count) ||
+            !encode_range(entry, index + 1U, true_span,
+                          encoded, warnings, true)) {
+            return false;
+        }
+
+        if (operation.condition_has_else || false_span != 0U) {
+            if (condition_count != 1U || false_span == 0U) {
+                warnings.push_back(entry.name +
+                    ": invalid or non-compact ELSE condition");
+                return false;
+            }
+            encoded.commands.push_back("ELSE;");
+            ++encoded.runtime_records;
+            if (!encode_range(entry, index + 1U + true_span, false_span,
+                              encoded, warnings, true)) {
+                return false;
+            }
+        }
+        for (std::size_t term = 0U; term < condition_count; ++term) {
+            encoded.commands.push_back("ENDIF;");
+            ++encoded.runtime_records;
+        }
+        index += 1U + controlled;
+    }
+    return true;
+}
+
+} // namespace
 
 std::string_view condition_key_for_kind(OperationKind kind) {
     switch (kind) {
@@ -27,12 +452,8 @@ std::string_view condition_key_for_kind(OperationKind kind) {
 }
 
 std::vector<std::uint8_t> operation_payload(const Operation& operation) {
-    if (!operation.byte_payload.empty()) {
-        return operation.byte_payload;
-    }
-    if (operation.width == 0U || operation.width > 4U) {
-        return {};
-    }
+    if (!operation.byte_payload.empty()) return operation.byte_payload;
+    if (operation.width == 0U || operation.width > 4U) return {};
     std::vector<std::uint8_t> bytes;
     bytes.reserve(operation.width);
     for (std::uint8_t index = 0U; index < operation.width; ++index) {
@@ -41,346 +462,18 @@ std::vector<std::uint8_t> operation_payload(const Operation& operation) {
     }
     return bytes;
 }
-std::string byte_list_suffix(const std::vector<std::uint8_t>& bytes) {
-    std::ostringstream output;
-    for (const std::uint8_t byte : bytes) {
-        output << ',' << text::hex(byte, 2);
-    }
-    output << ';';
-    return output.str();
-}
 
-std::optional<EnhancedActionSegment> encode_enhanced_action(
-    const Operation& operation,
-    std::vector<std::string>& warnings,
-    std::string_view entry_name) {
-    const std::vector<std::uint8_t> bytes = operation_payload(operation);
-    const auto compact = compact_write_address(operation.address);
-
-    if (operation.kind == OperationKind::Write) {
-        if (!compact || bytes.empty()) {
-            warnings.push_back(std::string(entry_name) +
-                ": Enhanced v3 cannot encode runtime write at " +
-                text::hex(operation.address, 8));
-            return std::nullopt;
-        }
-        const std::uint32_t count = operation.repeat == 0U
-            ? 1U : operation.repeat;
-        if (count == 1U) {
-            const std::string payload =
-                text::hex(*compact, 1) + byte_list_suffix(bytes);
-            return EnhancedActionSegment{
-                "ON=" + payload, "ON:" + payload, bytes.size(), true};
-        }
-
-        const std::int32_t address_step = operation.address_step == 0
-            ? static_cast<std::int32_t>(bytes.size())
-            : operation.address_step;
-        const bool fill = operation.value_step == 0 &&
-            address_step == static_cast<std::int32_t>(bytes.size());
-        std::ostringstream payload;
-        payload << text::hex(*compact, 1) << ','
-                << text::hex(count, 8);
-        if (!fill) {
-            payload << ',' << text::hex(
-                static_cast<std::uint32_t>(address_step), 8)
-                    << ',' << text::hex(
-                static_cast<std::uint32_t>(operation.value_step), 8);
-        }
-        payload << byte_list_suffix(bytes);
-        const std::string name = fill ? "FILL" : "SLIDE";
-        return EnhancedActionSegment{
-            name + "=" + payload.str(),
-            name + ":" + payload.str(),
-            static_cast<std::size_t>(count) * bytes.size(), false};
-    }
-
-    if (operation.kind == OperationKind::Add ||
-        operation.kind == OperationKind::Subtract) {
-        if (!compact || bytes.empty()) {
-            warnings.push_back(std::string(entry_name) +
-                ": Enhanced v3 cannot encode arithmetic operation");
-            return std::nullopt;
-        }
-        const std::string name = operation.kind == OperationKind::Add
-            ? "ADD" : "SUB";
-        const std::string payload =
-            text::hex(*compact, 1) + byte_list_suffix(bytes);
-        return EnhancedActionSegment{
-            name + "=" + payload,
-            name + ":" + payload,
-            1U + bytes.size(), false};
-    }
-
-    if (operation.kind == OperationKind::PointerWrite) {
-        if (!compact || bytes.empty() ||
-            (operation.address & 3U) != 0U) {
-            warnings.push_back(std::string(entry_name) +
-                ": Enhanced v3 pointer base/payload is not representable");
-            return std::nullopt;
-        }
-        const std::string payload =
-            text::hex(*compact, 1) + ',' +
-            text::hex(operation.pointer_offset, 8) +
-            byte_list_suffix(bytes);
-        return EnhancedActionSegment{
-            "PTR=" + payload, "PTR:" + payload,
-            3U + bytes.size(), false};
-    }
-
-    return std::nullopt;
-}
-std::optional<std::vector<ByteWrite>> flatten_condition_operation(
-    const Operation& operation) {
-    std::vector<ByteWrite> bytes;
-    for (const ConditionTerm& term : condition_terms(operation)) {
-        if (term.width == 0U || term.width > 4U) return std::nullopt;
-        const auto part = flatten(term.address, term.value, term.width);
-        bytes.insert(bytes.end(), part.begin(), part.end());
-    }
-    return bytes.empty() ? std::nullopt
-                         : std::optional<std::vector<ByteWrite>>(bytes);
-}
-
-EnhancedEntryPlan build_enhanced_v3_plan(
+std::optional<EnhancedEncodedOption> encode_enhanced_v4_option(
     const CheatEntry& entry,
     std::vector<std::string>& warnings) {
-    EnhancedEntryPlan plan;
-
-    for (std::size_t index = 0U; index < entry.operations.size(); ++index) {
-        const Operation& operation = entry.operations[index];
-        if (operation.kind == OperationKind::EncryptionSeed ||
-            operation.kind == OperationKind::GameId) {
-            continue;
-        }
-        if (operation.kind == OperationKind::Hook) {
-            warnings.push_back(entry.name +
-                ": hook/master code cannot be represented by EZ-Flash; "
-                "the dependent entry was skipped");
-            plan.compatibility_error = true;
-            return plan;
-        }
-
-        if (is_condition(operation.kind)) {
-            const std::uint32_t true_span = operation.condition_span == 0U
-                ? 1U : operation.condition_span;
-            const std::uint32_t false_span = operation.condition_else_span;
-            const std::uint64_t total_span =
-                static_cast<std::uint64_t>(true_span) + false_span;
-            if (index + total_span >= entry.operations.size()) {
-                warnings.push_back(entry.name +
-                    ": condition does not contain all controlled operations");
-                plan.compatibility_error = true;
-                break;
-            }
-
-            const auto condition_bytes =
-                flatten_condition_operation(operation);
-            if (!condition_bytes) {
-                warnings.push_back(entry.name +
-                    ": condition byte array is not representable by Enhanced v3");
-                plan.compatibility_error = true;
-                index += static_cast<std::size_t>(total_span);
-                continue;
-            }
-
-            const bool rom_condition = std::all_of(
-                condition_bytes->begin(), condition_bytes->end(),
-                [](const ByteWrite& byte) { return is_rom_address(byte.address); });
-            if (rom_condition) {
-                if (operation.kind != OperationKind::IfEqual ||
-                    operation.condition_has_else || false_span != 0U) {
-                    warnings.push_back(entry.name +
-                        ": Enhanced v3 ROMIF supports equality without ELSE only");
-                    plan.compatibility_error = true;
-                    index += static_cast<std::size_t>(total_span);
-                    continue;
-                }
-                EnhancedRomGuardBlock block;
-                for (const ByteWrite& byte : *condition_bytes) {
-                    const auto canonical = canonical_rom_address(byte.address);
-                    if (!canonical) {
-                        block.conditions.clear();
-                        break;
-                    }
-                    block.conditions.push_back(ByteWrite{*canonical, byte.value});
-                }
-                bool valid = !block.conditions.empty();
-                for (std::uint32_t offset = 1U;
-                     valid && offset <= true_span; ++offset) {
-                    const Operation& action = entry.operations[index + offset];
-                    if (action.kind == OperationKind::RomPatch &&
-                        rom_patch_is_direct_image_write(action)) {
-                        Operation normalized = action;
-                        normalized.address = *canonical_rom_address(action.address);
-                        append_expanded_write(block.rom_patches, normalized);
-                    } else if (encode_enhanced_action(
-                                   action, warnings, entry.name)) {
-                        block.runtime_actions.push_back(action);
-                    } else {
-                        valid = false;
-                    }
-                }
-                if (valid && (!block.runtime_actions.empty() ||
-                              !block.rom_patches.empty())) {
-                    plan.rom_guards.push_back(std::move(block));
-                } else {
-                    plan.compatibility_error = true;
-                }
-                index += static_cast<std::size_t>(total_span);
-                continue;
-            }
-
-            if (condition_key_for_kind(operation.kind).empty()) {
-                warnings.push_back(entry.name +
-                    ": condition type has no Enhanced v3 equivalent");
-                plan.compatibility_error = true;
-                index += static_cast<std::size_t>(total_span);
-                continue;
-            }
-            const bool runtime_addresses = std::all_of(
-                condition_bytes->begin(), condition_bytes->end(),
-                [](const ByteWrite& byte) {
-                    return compact_condition_address(byte.address).has_value();
-                });
-            if (!runtime_addresses) {
-                warnings.push_back(entry.name +
-                    ": condition address is outside Enhanced runtime ranges");
-                plan.compatibility_error = true;
-                index += static_cast<std::size_t>(total_span);
-                continue;
-            }
-
-            EnhancedConditionBlock block;
-            block.condition = operation;
-            bool valid = true;
-            for (std::uint32_t offset = 1U; offset <= true_span; ++offset) {
-                const Operation& action = entry.operations[index + offset];
-                if (!encode_enhanced_action(action, warnings, entry.name)) {
-                    valid = false;
-                    break;
-                }
-                block.true_actions.push_back(action);
-            }
-            for (std::uint32_t offset = 0U;
-                 valid && offset < false_span; ++offset) {
-                const Operation& action =
-                    entry.operations[index + 1U + true_span + offset];
-                if (!encode_enhanced_action(action, warnings, entry.name)) {
-                    valid = false;
-                    break;
-                }
-                block.false_actions.push_back(action);
-            }
-            if (valid) {
-                bool merged = false;
-                if (!block.condition.condition_has_else &&
-                    block.false_actions.empty() &&
-                    !plan.conditions.empty()) {
-                    EnhancedConditionBlock& previous =
-                        plan.conditions.back();
-                    const auto previous_bytes =
-                        flatten_condition_operation(previous.condition);
-                    const auto current_bytes =
-                        flatten_condition_operation(block.condition);
-                    if (!previous.condition.condition_has_else &&
-                        previous.false_actions.empty() &&
-                        previous.condition.kind == block.condition.kind &&
-                        previous_bytes && current_bytes &&
-                        equal_condition(*previous_bytes, *current_bytes)) {
-                        previous.true_actions.insert(
-                            previous.true_actions.end(),
-                            block.true_actions.begin(),
-                            block.true_actions.end());
-                        previous.condition.condition_span =
-                            static_cast<std::uint32_t>(
-                                previous.true_actions.size());
-                        merged = true;
-                    }
-                }
-                if (!merged) {
-                    plan.conditions.push_back(std::move(block));
-                }
-            } else {
-                plan.compatibility_error = true;
-            }
-            index += static_cast<std::size_t>(total_span);
-            continue;
-        }
-
-        if (operation.kind == OperationKind::RomPatch) {
-            if (!rom_patch_is_direct_image_write(operation)) {
-                warnings.push_back(entry.name +
-                    ": ROM patch mode is not a direct Enhanced image patch");
-                plan.compatibility_error = true;
-                continue;
-            }
-            Operation normalized = operation;
-            normalized.address = *canonical_rom_address(operation.address);
-            append_expanded_write(plan.direct_rom_patches, normalized);
-            continue;
-        }
-
-        if (encode_enhanced_action(operation, warnings, entry.name)) {
-            plan.direct_actions.push_back(operation);
-            continue;
-        }
-
-        if (operation.kind == OperationKind::DeviceSlowdown) {
-            warnings.push_back(entry.name +
-                ": physical GameShark slowdown has no Enhanced v3 equivalent");
-        } else {
-            warnings.push_back(entry.name +
-                ": unsupported Enhanced v3 operation at source line " +
-                std::to_string(operation.source_line));
-        }
-        // Do not emit a partially functional selectable entry when one of its
-        // independent direct operations cannot be represented.
-        plan = EnhancedEntryPlan{};
-        plan.compatibility_error = true;
-        return plan;
+    const CheatEntry optimized = optimize_enhanced_v4_entry(entry);
+    EnhancedEncodedOption encoded;
+    if (!encode_range(optimized, 0U, optimized.operations.size(), encoded,
+                      warnings, false) ||
+        encoded.commands.empty()) {
+        return std::nullopt;
     }
-    return plan;
-}
-
-std::size_t enhanced_action_records(const Operation& operation) {
-    const std::vector<std::uint8_t> bytes = operation_payload(operation);
-    if (operation.kind == OperationKind::Write) {
-        const std::size_t count = operation.repeat == 0U
-            ? 1U : operation.repeat;
-        return count * bytes.size();
-    }
-    if (operation.kind == OperationKind::Add ||
-        operation.kind == OperationKind::Subtract) {
-        return 1U + bytes.size();
-    }
-    if (operation.kind == OperationKind::PointerWrite) {
-        return 3U + bytes.size();
-    }
-    return 0U;
-}
-
-std::size_t enhanced_plan_records(const EnhancedEntryPlan& plan) {
-    std::size_t total = 0U;
-    for (const Operation& action : plan.direct_actions) {
-        total += enhanced_action_records(action);
-    }
-    for (const EnhancedConditionBlock& block : plan.conditions) {
-        const auto condition_bytes =
-            flatten_condition_operation(block.condition);
-        total += 1U + (condition_bytes ? condition_bytes->size() : 0U) + 1U;
-        if (block.condition.condition_has_else ||
-            !block.false_actions.empty()) total += 1U;
-        for (const Operation& action : block.true_actions)
-            total += enhanced_action_records(action);
-        for (const Operation& action : block.false_actions)
-            total += enhanced_action_records(action);
-    }
-    for (const EnhancedRomGuardBlock& block : plan.rom_guards) {
-        for (const Operation& action : block.runtime_actions)
-            total += enhanced_action_records(action);
-    }
-    return total;
+    return encoded;
 }
 
 } // namespace gba::ezflash::detail

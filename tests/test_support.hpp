@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cli/cli_app.hpp"
+#include "core/cmp.hpp"
 #include "core/detect.hpp"
 #include "core/inline_notes.hpp"
 #include "core/text.hpp"

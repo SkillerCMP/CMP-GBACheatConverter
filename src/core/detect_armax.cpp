@@ -1,5 +1,6 @@
 #include "core/detect_internal.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -41,7 +42,8 @@ Candidate score_armax(const std::vector<Line88>& rows, Format format) {
     int strong_addresses = 0;
     bool expects_payload = false;
 
-    for (const Line88& row : rows) {
+    for (std::size_t index = 0U; index < rows.size(); ++index) {
+        const Line88& row = rows[index];
         if (expects_payload) {
             result.score += 8;
             ++recognized;
@@ -112,6 +114,14 @@ Candidate score_armax(const std::vector<Line88>& rows, Format format) {
         if (condition != 0U) {
             result.score += 8;
             ++recognized;
+            const std::size_t required = base == 0x40000000U ? 2U :
+                (base == 0x00000000U ? 1U : 0U);
+            if (required != 0U && rows.size() - index - 1U < required) {
+                result.score -= 14;
+                result.reasons.push_back(
+                    "contains a trailing Action Replay condition without "
+                    "all controlled row(s)");
+            }
         } else if (base == 0x00000000U || base == 0x80000000U) {
             result.score += 7;
             ++recognized;

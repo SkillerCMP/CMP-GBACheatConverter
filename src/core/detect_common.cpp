@@ -1,5 +1,6 @@
 #include "core/detect_internal.hpp"
 
+#include "core/gba_memory.hpp"
 #include "core/text.hpp"
 
 #include <string>
@@ -27,8 +28,7 @@ std::optional<Line88> parse_8x8(std::string_view raw) {
 }
 
 bool plausible_gba_address(std::uint32_t address) {
-    return (address >= 0x02000000U && address <= 0x0203FFFFU) ||
-           (address >= 0x03000000U && address <= 0x03007FFFU) ||
+    return memory::canonical_ram_address(address).has_value() ||
            (address >= 0x04000000U && address <= 0x040003FFU) ||
            (address >= 0x05000000U && address <= 0x050003FFU) ||
            (address >= 0x06000000U && address <= 0x06017FFFU) ||
@@ -38,10 +38,7 @@ bool plausible_gba_address(std::uint32_t address) {
 }
 
 int address_score(std::uint32_t address) {
-    if (address >= 0x02000000U && address <= 0x0203FFFFU) {
-        return 7;
-    }
-    if (address >= 0x03000000U && address <= 0x03007FFFU) {
+    if (memory::canonical_ram_address(address)) {
         return 7;
     }
     if (address >= 0x04000000U && address <= 0x040003FFU) {

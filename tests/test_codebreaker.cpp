@@ -217,9 +217,9 @@ void test_codebreaker_slide_to_ez() {
     const auto document = gba::codebreaker::parse(input, {false});
     const auto output = gba::ezflash::export_document(document);
     require(output.text.find(
-                "SLIDE=1000,00000004,00000002,00000001,00,10;") !=
+                "SLIDE:W16,1000,00000004,00000002,00000001,1000;") !=
                 std::string::npos,
-            "CodeBreaker slide did not convert to Enhanced v3 SLIDE");
+            "CodeBreaker slide did not convert to Enhanced v4 SLIDE");
 }
 
 void test_codebreaker_packed_list_parse_and_export() {
@@ -269,7 +269,7 @@ void test_codebreaker_packed_list_to_ez() {
     const auto document = gba::codebreaker::parse(input, {false});
     const auto output = gba::ezflash::export_document(document);
     require(output.text.find(
-                "ON=2000,34,12,CD,AB,01,0F,68,24,57,13;") !=
+                "=W32:2000,ABCD1234;W32:2004,24680F01;W16:2008,1357;") !=
                 std::string::npos,
             "Packed list did not expand correctly for EZ-Flash");
 }
@@ -339,7 +339,7 @@ void test_fcd_condition_variants_roundtrip() {
         "82002006 0004\n"
         "F2001008 000F\n"
         "82002008 0005\n"
-        "D0000020 FFFE\n"
+        "D0000020 0001\n"
         "8200200A 0006\n";
 
     const auto document = gba::codebreaker::parse(input, {false});
@@ -350,23 +350,40 @@ void test_fcd_condition_variants_roundtrip() {
             "FCD condition variants decoded to the wrong operation count");
 
     const auto& button = document.entries[0].operations[10];
-    require(button.kind == gba::OperationKind::IfNand &&
+    require(button.kind == gba::OperationKind::IfEqual &&
             button.address == 0x04000130U &&
-            button.value == 0xFFFEU &&
+            button.value == 0U &&
+            button.condition_has_mask &&
+            button.condition_mask == 0x0001U &&
             button.condition_span == 1U,
-            "FCD button activator did not decode as KEYINPUT NAND");
+            "FCD button activator did not decode as masked KEYINPUT equality");
 
     const auto raw = gba::codebreaker::export_document(document, {});
     require(raw.success &&
-            raw.text.find("D0000020 FFFE\n8200200A 0006") !=
+            raw.text.find("D0000020 0001\n8200200A 0006") !=
                 std::string::npos,
             "FCD button activator did not roundtrip in raw output");
+
+    const auto ez = gba::ezflash::export_document(document);
+    require(ez.success &&
+            ez.text.find("IFNEM:W16,1008,000F,0000;") !=
+                std::string::npos &&
+            ez.text.find("IFM:W16,80130,0001,0000;") !=
+                std::string::npos,
+            "FCD logical/button mask conditions did not map to IFNEM/IFM");
+
+    const auto fcd_again = gba::codebreaker::export_document(
+        gba::ezflash::parse(ez.text), {});
+    require(fcd_again.success &&
+            fcd_again.text.find("F2001008 000F") != std::string::npos &&
+            fcd_again.text.find("D0000020 0001") != std::string::npos,
+            "IFNEM/IFM conditions did not round-trip to FCD mask types");
 }
 
 void test_fcd_button_activator_encrypted_roundtrip() {
     const std::string input =
         "Button Activator:\n"
-        "D0000020 FFFE\n"
+        "D0000020 0001\n"
         "82002000 1234\n";
 
     const auto document = gba::codebreaker::parse(input, {false});
@@ -379,7 +396,7 @@ void test_fcd_button_activator_encrypted_roundtrip() {
 
     const auto decrypted = gba::codebreaker::parse(encrypted.text, {true});
     const auto raw = gba::codebreaker::export_document(decrypted, {});
-    require(raw.text.find("D0000020 FFFE\n82002000 1234") !=
+    require(raw.text.find("D0000020 0001\n82002000 1234") !=
                 std::string::npos,
             "FCD button activator did not survive encrypted roundtrip");
 }
@@ -387,15 +404,24 @@ void test_fcd_button_activator_encrypted_roundtrip() {
 void test_fcd_button_activator_does_not_leak() {
     const std::string input =
         "Button Safety:\n"
-        "D0000020 FFFE\n"
+        "D0000020 0001\n"
         "82002000 1234\n";
 
     const auto document = gba::codebreaker::parse(input, {false});
 
     const auto ez = gba::ezflash::export_document(document);
-    require(!ez.success &&
-            ez.text.find("ON=2000,34,12") == std::string::npos,
-            "Unsupported FCD button activator leaked its write to EZ-Flash");
+    require(ez.success &&
+            ez.text.find(
+                "=IFM:W16,80130,0001,0000;W16:2000,1234;ENDIF;") !=
+                std::string::npos,
+            "FCD button activator did not convert to exact EZ-Flash IFM syntax");
+
+    const auto fcd_again = gba::codebreaker::export_document(
+        gba::ezflash::parse(ez.text), {});
+    require(fcd_again.success &&
+            fcd_again.text.find("D0000020 0001\n82002000 1234") !=
+                std::string::npos,
+            "EZ-Flash IFM button condition did not round-trip to CodeBreaker");
 
     const auto gs = gba::gameshark::export_document(document, {});
     require(!gs.success &&
@@ -438,9 +464,9 @@ void test_fcd_conditioned_slide_roundtrip() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.text.find(
-                "IF=1000,11,11;SLIDE=2000,00000004,00000002,00000001,00,10;") !=
+                "=IF:W16,1000,1111;SLIDE:W16,2000,00000004,00000002,00000001,1000;ENDIF;") !=
                 std::string::npos,
-            "Conditional slide did not convert to Enhanced v3 SLIDE");
+            "Conditional slide did not convert to Enhanced v4 SLIDE");
 }
 
 void test_fcd_conditioned_packed_list_scope() {
@@ -469,7 +495,7 @@ void test_fcd_conditioned_packed_list_scope() {
 
     const auto ez = gba::ezflash::export_document(document);
     require(ez.success && ez.text.find(
-                "IF=1000,11,11;ON=2000,34,12,CD,AB,01,0F,68,24,57,13;") !=
+                "=IF:W16,1000,1111;W32:2000,ABCD1234;W32:2004,24680F01;W16:2008,1357;ENDIF;") !=
                 std::string::npos,
             "Conditioned packed list did not preserve its full scope in EZ");
 

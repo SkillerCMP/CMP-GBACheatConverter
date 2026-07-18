@@ -7,18 +7,59 @@
 
 namespace gba::cli::detail {
 
+void list_formats(std::ostream& output_stream) {
+    output_stream
+        << "Semantic text formats (input/output):\n"
+        << "  cb-raw\n"
+        << "  cb-encrypted\n"
+        << "  gsa-raw\n"
+        << "  gsa-encrypted\n"
+        << "  armax-raw\n"
+        << "  armax-encrypted\n"
+        << "  xploder-raw\n"
+        << "  xploder-encrypted\n"
+        << "  ez\n\n"
+        << "Native file formats:\n"
+        << "  armax-dsc       input/output\n"
+        << "  vba-clt         input/output\n"
+        << "  myboy-cht       input/output (provisional schema)\n"
+        << "  retroarch-cht   input/output\n"
+        << "  mgba-cheats     input/output\n"
+        << "  mednafen-cht    input/output\n"
+        << "  mister-gg       input/output (one cheat)\n"
+        << "  mister-zip      input/output (multiple .gg files)\n"
+        << "  ezflash-cht     input/output\n\n"
+        << "Automatic input:\n"
+        << "  auto, native\n";
+}
+
 void usage(std::ostream& error_stream, std::string_view program_name) {
     error_stream
         << "GBA Cheat Converter v" GBA_CHEAT_VERSION "\n\n"
-        << "Semantic conversion:\n"
+        << "Semantic or native conversion:\n"
         << "  " << program_name << " --from FORMAT --to FORMAT "
            "[--cb-input-key 9XXXXXXX:YYYY] [--cb-key 9XXXXXXX:YYYY] "
-           "[--ez-mode original|enhanced] file\n\n"
-        << "Formats:\n"
-        << "  cb-raw, cb-encrypted, gsa-raw, gsa-encrypted,\n"
-        << "  armax-raw, armax-encrypted, xploder-raw,\n"
-        << "  xploder-encrypted, ez\n"
-        << "  EZ Enhanced follows Omega DE Kernel 1.06 Enhanced v3: IF-family comparisons, ELSE, ADD/SUB, PTR, FILL/SLIDE, ROM/ROMIF, and the shared 128-record runtime limit.\n\n"
+           "[--ez-mode original|enhanced] [--rom-md5 MD5] [--game-name NAME] [--output FILE] file\n\n"
+        << "Inspection:\n"
+        << "  " << program_name << " --detect-only file\n"
+        << "  " << program_name << " --list-formats\n\n"
+        << "Common native examples:\n"
+        << "  " << program_name
+        << " --from auto --to vba-clt --output game.clt game.cht\n"
+        << "  " << program_name
+        << " --from auto --to retroarch-cht --output retroarch.cht game.cht\n"
+        << "  " << program_name
+        << " --from auto --to mgba-cheats --output game.cheats game.cht\n"
+        << "  " << program_name
+        << " --from auto --to mister-zip --output game.zip game.cht\n"
+        << "  " << program_name
+        << " --from auto --to mednafen-cht --rom-md5 "
+           "0123456789abcdef0123456789abcdef --game-name Game --output gba.cht game.cht\n\n"
+        << "Use --output FILE (or -o FILE) to write text or binary output directly.\n"
+        << "Binary stdout still supports shell redirection with > FILE; never use >>.\n"
+        << "Use --list-formats for the complete canonical format list.\n"
+        << "Warnings are shown by default; --show-warnings is accepted for "
+           "explicit scripts.\n\n"
         << "Crypto-only 8+8 conversion:\n"
         << "  " << program_name << " --crypt gsa-v1|par-v3 "
            "--encrypt|--decrypt file\n";
@@ -52,6 +93,18 @@ Options parse_arguments(const std::vector<std::string>& arguments) {
                 throw std::runtime_error(
                     "Invalid CodeBreaker output key; expected 9XXXXXXX:YYYY");
             }
+        } else if ((argument == "--output" || argument == "-o") &&
+                   index + 1U < arguments.size()) {
+            options.output_path = arguments[++index];
+            if (options.output_path.empty()) {
+                throw std::runtime_error("Output path cannot be empty");
+            }
+        } else if (argument == "--rom-md5" &&
+                   index + 1U < arguments.size()) {
+            options.rom_md5 = arguments[++index];
+        } else if (argument == "--game-name" &&
+                   index + 1U < arguments.size()) {
+            options.game_name = arguments[++index];
         } else if (argument == "--ez-mode" &&
                    index + 1U < arguments.size()) {
             const std::string mode = arguments[++index];
@@ -68,6 +121,13 @@ Options parse_arguments(const std::vector<std::string>& arguments) {
             options.encrypt = true;
         } else if (argument == "--decrypt") {
             options.decrypt = true;
+        } else if (argument == "--show-warnings") {
+            options.show_warnings = true;
+        } else if (argument == "--detect-only") {
+            options.action = Action::DetectOnly;
+        } else if (argument == "--list-formats") {
+            options.action = Action::ListFormats;
+            return options;
         } else if (argument == "--version" || argument == "-V") {
             options.action = Action::Version;
             return options;

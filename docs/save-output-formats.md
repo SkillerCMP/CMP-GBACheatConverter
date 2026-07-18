@@ -8,7 +8,7 @@ File
     Current Output Text...
     EZ-Flash (.cht)...
     Action Replay MAX (.dsc)...
-    VisualBoy Advance (.clt)...
+    VisualBoy Advance-M (.clt)...
     My Boy! (.cht)...
     MiSTer (.zip)...
     Mednafen (.cht)...
@@ -33,55 +33,60 @@ before Auto Convert runs.
 | Native file | Input selection after import |
 |---|---|
 | Action Replay MAX `.dsc` | Encrypted Action Replay MAX |
-| VisualBoy Advance `.clt` | Raw CodeBreaker/FCD |
+| VisualBoy Advance-M `.clt` | Stored FCD, GameShark, or PAR v3 family when identifiable; otherwise a safe common format |
 | EZ-Flash `.cht` | EZ-Flash |
 | My Boy! `.cht` | Contained family, or a lossless common format when mixed |
 | mGBA `.cheats` | Contained family, or a lossless common format when mixed |
 | Libretro `.cht` | Contained family, or a lossless common format when mixed |
-| Mednafen `.cht` | Raw CodeBreaker/FCD |
-| MiSTer `.zip` | Lossless FCD, AR MAX, or EZ-Flash text |
+| Mednafen `.cht` | Editable compatible family when exact; otherwise native-only metadata retained for CLI re-export |
+| MiSTer `.gg` / `.zip` | Lossless direct-write and one-record-condition text |
 
-Detection is content-based because several unrelated formats share `.cht`.
-Binary record counts and lengths are bounds-checked. MiSTer ZIP local headers,
-stored sizes, CRC-32 values, `.gg` masks, and condition depths are validated.
-The importer supports the uncompressed ZIP layout produced by this converter;
-a ZIP using compression or data descriptors is rejected explicitly.
+Detection is parser-backed and confidence-scored because several unrelated formats share `.cht`. EZ-Flash, My Boy!, RetroArch, and Mednafen parsers are all evaluated; extension is only a confidence signal. Competing matches are reported.
+Binary record counts and lengths are bounds-checked. MiSTer input validates the
+ZIP central directory, local headers, Stored or Deflate payloads, optional data
+descriptors, CRC-32 values, `.gg` byte masks, operation types, aligned 28-bit
+addresses, and the GBA core's 32-record limit. Raw `.gg` files are accepted
+directly. A normal ZIP without a structurally valid `.gg` entry is not claimed
+as MiSTer input.
 
-VBA `.clt` records are reconstructed from their decoded width, address, and
-value fields instead of relying on the short display-code field. This is
-necessary to preserve 32-bit writes.
+VBA-M `.clt` import accepts the current type-1 84-byte record layout and the
+legacy type-0 80-byte layout. Stored CodeBreaker/FCD, GameShark v1/v2, and PAR
+v3 code strings are preserved when valid. Generic internal direct-write records
+are reconstructed from their decoded width, address, and value fields.
 
 
 ## EZ-Flash `.cht`
 
-The writer follows the currently selected `Options > EZ-Flash` mode. It does
-not merely copy the Output text: the current Output editor is parsed and then
-re-emitted through the audited EZ-Flash exporter, so manual edits are included
-and the kernel limits are enforced.
+The writer follows the selected `Options > EZ-Flash` mode. It reparses the
+current Output editor, so manual edits are included and target limits are
+rechecked.
 
 ### Original
 
-- emits byte writes using `ON=` only
+- emits stock byte-list values such as `ON=25BC4,3F,42;`
 - expands safe 16- and 32-bit writes into sequential bytes
-- omits condition-controlled or otherwise dependent entries as a complete unit
-- never writes to the compact I/O range
+- omits conditions and other dependent operations as complete units
+- remains compatible with the stock Omega DE `.cht` engine
 
-### Enhanced
+### Enhanced 1.06E7 format revision 6
 
-- emits equality, inequality, and unsigned ordered IF-family groups
-- preserves supported `ELSE` / `ENDIF` branches
-- emits arbitrary-byte `ADD=`, `SUB=`, one-level `PTR=`, `FILL=`, and `SLIDE=`
-- emits standalone `ROM=` image patches
-- emits canonical `ROMIF=...;ON=...;ROM=...;` guarded mixed entries
-- preserves runtime `IF=...;ON=...;ROM=...;` ordering with an independent ROM tail
-- preserves multiple sequential IF groups and compound AND terms
-- supports continuation rows when a menu line would exceed the safe length
-- enforces 49-byte section names, 298-character physical rows, and the shared
-  128-runtime-record limit
+- emits ungrouped entries as standalone `CodeName=commands;` rows
+- emits plain `[Group]` sections as multi-select groups whose siblings may all be active
+- emits `[Group|ONE]` for zero-or-one groups; the exact uppercase suffix is case-sensitive
+- reserves `=` for code names and uses `:` for every Enhanced command
+- emits one-record `W8`, `W16`, and `W32` writes
+- emits width-aware IF-family comparisons with nested `ELSE` / `ENDIF`
+- emits one-record `ADD` / `SUB`, two-record `PTR` / `FILL`, and four-record `SLIDE`
+- keeps FILL/SLIDE record costs fixed regardless of repetition count
+- emits pre-launch `ROMIF` guards and `ROM` patches in separate tables
+- rejects ROM patches inside runtime IF branches
+- enforces 49-byte group/code names, including the physical `|ONE` suffix, 298-character rows, the shared 128-record table, and the 4,096-write-per-pass budget
+- sums standalone rows and plain-group siblings for capacity because they may be active together
+- counts only the largest sibling in each `|ONE` group
 
-Both modes use `.cht` as the file extension. Compatibility omissions are shown
-after the file is saved; if nothing can be represented safely, no file is
-created.
+Standalone rows must precede the first group; the exporter reorders them with a warning when necessary. The earlier command-as-key grammar is not accepted. Stock Original byte-list values remain supported as a separate mode.
+
+Both modes use `.cht`. If no entry can be represented safely, no file is created.
 
 ## Action Replay MAX `.dsc`
 
@@ -97,23 +102,33 @@ The output filename becomes the game title. Master/hook/Game-ID entries are
 omitted because the supplied `.dsc` sample stores normal selectable cheats,
 not the game master record. Names are truncated to the container limits.
 
-## VisualBoy Advance `.clt`
+## VisualBoy Advance-M `.clt`
 
-The writer produces the legacy VBA fixed table:
+The writer produces the current VBA-M type-1 container:
 
 - version `1`
 - list type `1`
-- up to 100 fixed 80-byte records
-- decoded address, value, and width fields
-- original-style compact code text and description fields
+- variable record count with no fixed empty-record padding
+- 84-byte records matching the current `CheatsData` field layout
+- correct `code`, `size`, `status`, `enabled`, `rawaddress`, `address`,
+  `value`, `oldValue`, code-string, and description offsets
+- maximum 16,384 records
 
-Only independent 8-, 16-, and 32-bit memory writes are safe in this legacy
-record layout. Conditions, pointers, patches, hooks, and other dependent
-operations are omitted as complete entries.
+Each entry is first encoded as exact CodeBreaker/FCD internal records when that
+family can preserve it. Otherwise, the exporter tries exact encrypted PAR v3
+records and stores both the original encrypted row and its decoded VBA-M
+operation fields. This permits conditions, slides, fills, pointers, arithmetic,
+ROM operations, master records, and other supported types when an exact family
+representation exists. Entries that cannot be represented exactly are omitted
+as complete units.
+
+The importer also accepts VBA-M's legacy type-0 80-byte records. Exported
+records are disabled by default so opening a generated list does not
+automatically activate every cheat.
 
 ## My Boy! `.cht`
 
-The XML writer can mix formats per entry:
+This implementation is provisional: it is based on existing converter fixtures, not an inspected upstream My Boy! parser source. The XML writer can mix formats per entry:
 
 - `type="cb"` for exact raw FCD/CodeBreaker-compatible entries
 - `type="gs3"` for exact raw PAR v3/Action Replay MAX entries
@@ -121,51 +136,160 @@ The XML writer can mix formats per entry:
 Names are XML escaped. Entries that cannot be represented exactly by either
 family are omitted.
 
-## MiSTer `.zip`
+## MiSTer `.gg` / `.zip`
 
-The writer creates a standard ZIP archive containing one `.gg` file per cheat.
-Each `.gg` record is the 16-byte little-endian unit used by the attached
-MiSTer archive.
+The `mister-zip` writer creates a standard ZIP archive containing one Stored `.gg` file per cheat. The `mister-gg` writer emits one raw `.gg` payload and therefore requires exactly one compatible cheat entry. The importer accepts both raw `.gg` files and ZIP entries using either
+Stored or Deflate compression, including ordinary central-directory data
+descriptors.
+
+Each GBA `.gg` record is 16 bytes and contains four little-endian dwords:
+
+```text
+flags | address | compare/reserved | replacement
+```
+
+The GBA core uses the low flags nibble as the operation type, the next nibble
+as a four-byte lane mask, a canonical aligned 28-bit address, and the
+replacement/comparison value. The third dword is present in the container but
+is ignored by the GBA core; nonzero values are reported and normalized away on
+re-export.
 
 Supported operations:
 
-- independent 8-, 16-, and 32-bit writes
-- exact equality conditions controlling one or more writes
+- independent aligned 8-, 16-, and 32-bit writes
+- equality, inequality, greater-than, greater-or-equal, less-than, and
+  less-or-equal conditions
+- arbitrary imported byte-lane write masks, reconstructed as exact byte/word
+  writes
 
-Unsupported condition types, ELSE blocks, pointers, cartridge patches, hooks,
-and device-only operations are omitted as complete entries. A single `.gg`
-file is limited to 128 records, matching the MiSTer runtime table.
+A MiSTer condition only decides whether the immediately following record is
+executed. When one semantic condition controls several writes, the exporter
+repeats the condition before every write. Those repeated records count toward
+the hardware limit. Each `.gg` file is therefore limited to **32 records**.
+
+Nested condition skip-chains, ELSE blocks, pointers, cartridge patches, hooks,
+and device-only operations are omitted as complete entries when their behavior
+cannot be represented exactly.
 
 ## Mednafen `.cht`
 
-Mednafen identifies a GBA cheat section by the ROM MD5. After choosing the
-output filename, the GUI asks for the matching `.gba` ROM and calculates the
-MD5 automatically. The ROM filename becomes the game title in the header.
+The codec follows Mednafen 1.32.1's `mempatcher.cpp` load/save grammar. A file
+may contain multiple game sections:
 
-Only independent direct writes are emitted. Condition-controlled writes and
-other dependent operations are omitted rather than made unconditional.
+```text
+[0123456789abcdef0123456789abcdef] Game Name
+R A 1 L 0 02000000 63 Infinite Health
+
+```
+
+Supported native records include:
+
+- `R` replace/write
+- `A` add
+- `T` transfer/copy
+- `S` read substitution
+- `C` compare-on-read substitution
+- active `A` and inactive `I` state
+- lengths from 1 through 8 bytes
+- little-endian `L` and big-endian `B` values
+- 64-bit values and compare values
+- instance counts
+- extended `!` records with repeat count, destination increment, value
+  increment, transfer source address, and source increment
+- multiple comma-separated conditions using `>=`, `<=`, `>`, `<`, `==`,
+  `!=`, `&`, `!&`, `^`, `!^`, `|`, and `!|`
+- multiple ROM MD5/game-name sections in one file
+
+Imported native records retain every field for exact Mednafen-to-Mednafen CLI
+re-export. Compatible records are also exposed through the shared semantic
+model. Records that are valid only in Mednafen remain native-only instead of
+being guessed into a device-code family.
+
+For newly generated files, the GUI asks for the matching `.gba` ROM and
+calculates the section MD5. The CLI accepts:
+
+```text
+GbaCheatConverterCLI --from cb-raw --to mednafen-cht \
+  --rom-md5 0123456789abcdef0123456789abcdef \
+  --game-name "Game Name" codes.txt > gba.cht
+```
+
+A regular sequence of writes with constant address and value steps can be
+collapsed into one extended record. Irregular multi-operation entries are
+omitted as a whole rather than split into independently toggleable Mednafen
+cheats.
 
 ## mGBA `.cheats`
 
-The writer creates disabled cheats and selects the exact format per entry:
+The codec follows mGBA's `mCheatParseFile`, `mCheatSaveFile`, and GBA cheat
+directive handlers. It supports:
 
-- raw CodeBreaker/FCD rows by default
-- encrypted PAR v3 rows preceded by `!PARv3` when FCD cannot represent the
-  entry exactly
+- `!GSAv1` and `!GSAv1 raw`
+- `!PARv3` and `!PARv3 raw`
+- `!disabled` for the following set
+- `!reset` directive-list behavior
+- named `# Cheat` sets
+- CodeBreaker 8+4 rows
+- GameShark/PAR 8+8 rows
+- VBA `ADDRESS:VALUE` rows with 8-, 16-, or 32-bit values
+- enabled-only files that contain no `!disabled` marker
+
+Imported sets retain their resolved family, original rows, and toggle state for
+lossless mGBA-to-mGBA CLI output. Mixed-family sets that cannot be represented
+safely in one GUI device-code format remain available as native-only records.
+
+New semantic entries keep their `enabled` state. The writer prefers exact raw
+CodeBreaker rows, retains the historical encrypted PAR v3 fallback, and now
+also tries exact GSAv1 and raw PAR/GS families before omitting an incompatible
+entry.
 
 ## Libretro / RetroArch `.cht`
 
-The writer creates the indexed Libretro format:
+The codec follows RetroArch's indexed `cheat_manager` format. It reads and
+writes the complete saved field set for every record:
 
 ```text
 cheats = N
 cheat0_desc = "Name"
 cheat0_code = "CODE+CODE"
 cheat0_enable = false
+cheat0_big_endian = false
+cheat0_handler = 0
+cheat0_memory_search_size = 3
+cheat0_cheat_type = 1
+cheat0_value = 0
+cheat0_address = 0
+cheat0_address_bit_position = 0
+cheat0_rumble_type = 0
+cheat0_rumble_value = 0
+cheat0_rumble_port = 0
+cheat0_rumble_primary_strength = 0
+cheat0_rumble_primary_duration = 0
+cheat0_rumble_secondary_strength = 0
+cheat0_rumble_secondary_duration = 0
+cheat0_repeat_count = 1
+cheat0_repeat_add_to_value = 0
+cheat0_repeat_add_to_address = 1
 ```
 
-Each entry uses exact raw FCD rows when possible, otherwise exact raw PAR v3
-rows. Entries that cannot be represented by either are omitted.
+Two handler modes are preserved:
+
+- `handler = 0` passes `code` to the active Libretro core. New semantic
+  entries are exported in this mode using exact raw FCD rows when possible,
+  otherwise exact raw PAR v3 rows.
+- `handler = 1` is RetroArch's native memory engine. Imported records retain
+  the operation type, width, endian flag, address mask, repeats, value/address
+  increments, enabled state, and rumble fields for exact native re-export.
+
+Native handler-1 addresses are offsets in RetroArch's flattened core-memory
+space, not guaranteed GBA hardware addresses. Direct writes/add/subtract may be
+shown semantically when safe, but cross-record conditions, sub-byte masks,
+and core-specific records remain native-only instead of being guessed. The CLI
+can perform lossless native-to-native conversion with:
+
+```text
+GbaCheatConverterCLI --from retroarch-cht --to retroarch-cht game.cht
+```
 
 ## Safety and warnings
 

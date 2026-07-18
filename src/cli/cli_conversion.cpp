@@ -1,10 +1,12 @@
 #include "cli/cli_internal.hpp"
 
+#include "core/cmp.hpp"
 #include "core/detect.hpp"
 #include "core/inline_notes.hpp"
 #include "formats/armax.hpp"
 #include "formats/gameshark.hpp"
 #include "formats/xploder.hpp"
+#include "export/output_modes.hpp"
 
 #include <optional>
 #include <ostream>
@@ -44,7 +46,10 @@ void resolve_auto_format(Options& options,
         return;
     }
 
-    const gba::detect::Result detected = gba::detect::format(input);
+    const gba::cmp::NormalizedInput cmp_input =
+        gba::cmp::normalize_input(input);
+    const gba::detect::Result detected = gba::detect::format(
+        cmp_input.recognized ? cmp_input.text : input);
     const auto mapped = cli_format(detected.format);
     if (!mapped) {
         std::string message =
@@ -86,62 +91,200 @@ int run_direct_armax_transform(const Options& options,
 }
 
 CheatDocument parse_document(const Options& options, std::string_view input) {
+    const gba::cmp::NormalizedInput cmp_input =
+        gba::cmp::normalize_input(input);
+    const std::string_view semantic_input =
+        cmp_input.recognized ? std::string_view(cmp_input.text) : input;
+
+    CheatDocument document;
     if (options.from == "cb-raw") {
-        return gba::codebreaker::parse(input, {false});
-    }
-    if (options.from == "cb-encrypted") {
-        if (!gba::codebreaker::find_embedded_seed(input) &&
+        document = gba::codebreaker::parse(semantic_input, {false});
+    } else if (options.from == "cb-encrypted") {
+        if (!gba::codebreaker::find_embedded_seed(semantic_input) &&
             !options.cb_input_seed) {
             throw std::runtime_error(
                 "Encrypted CodeBreaker input is missing its embedded key; "
                 "use --cb-input-key 9XXXXXXX:YYYY");
         }
-        return gba::codebreaker::parse(
-            input,
-            {true,
-             options.cb_input_seed,
+        document = gba::codebreaker::parse(
+            semantic_input,
+            {true, options.cb_input_seed,
              options.cb_input_seed.has_value()});
-    }
-    if (options.from == "gsa-raw") {
-        return gba::gameshark::parse(input, {false});
-    }
-    if (options.from == "gsa-encrypted") {
-        return gba::gameshark::parse(input, {true});
-    }
-    if (options.from == "armax-raw") {
-        return gba::armax::parse(input, {false});
-    }
-    if (options.from == "armax-encrypted") {
-        return gba::armax::parse(input, {true});
-    }
-    if (options.from == "xploder-raw" || options.from == "xp-raw") {
-        return gba::xploder::parse(input, {false});
-    }
-    if (options.from == "xploder-encrypted" ||
-        options.from == "xp-encrypted") {
-        if (!gba::codebreaker::find_embedded_seed(input) &&
+    } else if (options.from == "gsa-raw") {
+        document = gba::gameshark::parse(semantic_input, {false});
+    } else if (options.from == "gsa-encrypted") {
+        document = gba::gameshark::parse(semantic_input, {true});
+    } else if (options.from == "armax-raw") {
+        document = gba::armax::parse(semantic_input, {false});
+    } else if (options.from == "armax-encrypted") {
+        document = gba::armax::parse(semantic_input, {true});
+    } else if (options.from == "xploder-raw" || options.from == "xp-raw") {
+        document = gba::xploder::parse(semantic_input, {false});
+    } else if (options.from == "xploder-encrypted" ||
+               options.from == "xp-encrypted") {
+        if (!gba::codebreaker::find_embedded_seed(semantic_input) &&
             !options.cb_input_seed) {
             throw std::runtime_error(
                 "Encrypted Xploder input is missing its embedded key; "
                 "use --cb-input-key 9XXXXXXX:YYYY");
         }
-        return gba::xploder::parse(
-            input,
-            {true,
-             options.cb_input_seed,
+        document = gba::xploder::parse(
+            semantic_input,
+            {true, options.cb_input_seed,
              options.cb_input_seed.has_value()});
+    } else if (options.from == "ez") {
+        document = gba::ezflash::parse(semantic_input);
+    } else {
+        throw std::runtime_error(
+            "Unknown semantic input format: " + options.from);
     }
-    if (options.from == "ez") {
-        return gba::ezflash::parse(input);
+
+    if (cmp_input.recognized) {
+        document = gba::cmp::attach_layout(cmp_input, std::move(document));
     }
-    throw std::runtime_error(
-        "Unknown semantic input format: " + options.from);
+    return document;
 }
 
 int export_document(const Options& options,
                     const CheatDocument& document,
                     std::ostream& output_stream,
                     std::ostream& error_stream) {
+    if (options.to == "armax-dsc") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        gba::output_modes::Options native_options;
+        native_options.game_name = options.game_name;
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::ArmaxDsc,
+            native_options);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "myboy-cht" || options.to == "myboy") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::MyBoyCht);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "ezflash-cht") {
+        const CheatDocument native_document =
+            gba::cmp::prepare_for_ezflash(document);
+        gba::output_modes::Options native_options;
+        native_options.ezflash_mode = options.ez_mode == gba::ezflash::Mode::Original
+            ? gba::output_modes::EzFlashMode::Original
+            : gba::output_modes::EzFlashMode::Enhanced;
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::EzFlashCht,
+            native_options);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "retroarch-cht" ||
+        options.to == "libretro-cht" ||
+        options.to == "retroarch") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::LibretroCht);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "mgba-cheats" || options.to == "mgba") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::MgbaCheats);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "mednafen-cht" || options.to == "mednafen") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        gba::output_modes::Options native_options;
+        native_options.game_name = options.game_name;
+        native_options.rom_md5 = options.rom_md5;
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::MednafenCht,
+            native_options);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "mister-gg") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::MisterGg);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "mister-zip" || options.to == "mister" ||
+        options.to == "mister-gba") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        const auto result = gba::output_modes::export_document(
+            native_document, gba::output_modes::Format::MisterZip);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    if (options.to == "vba-clt" || options.to == "clt") {
+        const CheatDocument native_document =
+            gba::cmp::flatten_for_device_output(document);
+        const auto result = gba::output_modes::export_document(
+            native_document,
+            gba::output_modes::Format::VisualBoyAdvanceClt);
+        if (!result.data.empty()) {
+            output_stream.write(
+                reinterpret_cast<const char*>(result.data.data()),
+                static_cast<std::streamsize>(result.data.size()));
+        }
+        print_warnings(result.warnings, error_stream);
+        return result.success ? 0 : 1;
+    }
+    const CheatDocument device_document = options.to == "ez"
+        ? gba::cmp::prepare_for_ezflash(document)
+        : gba::cmp::flatten_for_device_output(document);
     if (options.to == "cb-raw" || options.to == "cb-encrypted") {
         gba::codebreaker::ExportOptions export_options;
         export_options.encrypted = options.to == "cb-encrypted";
@@ -152,10 +295,10 @@ int export_document(const Options& options,
         }
 
         const auto result =
-            gba::codebreaker::export_document(document, export_options);
+            gba::codebreaker::export_document(device_document, export_options);
         output_stream << gba::inline_notes::apply(
             result.text,
-            document,
+            device_document,
             result.warnings,
             {gba::inline_notes::Style::Slash, true});
         print_warnings(result.warnings, error_stream);
@@ -166,10 +309,10 @@ int export_document(const Options& options,
         gba::gameshark::ExportOptions export_options;
         export_options.encrypted = options.to == "gsa-encrypted";
         const auto result =
-            gba::gameshark::export_document(document, export_options);
+            gba::gameshark::export_document(device_document, export_options);
         output_stream << gba::inline_notes::apply(
             result.text,
-            document,
+            device_document,
             result.warnings,
             {gba::inline_notes::Style::Slash, true});
         print_warnings(result.warnings, error_stream);
@@ -180,10 +323,10 @@ int export_document(const Options& options,
         gba::armax::ExportOptions export_options;
         export_options.encrypted = options.to == "armax-encrypted";
         const auto result =
-            gba::armax::export_document(document, export_options);
+            gba::armax::export_document(device_document, export_options);
         output_stream << gba::inline_notes::apply(
             result.text,
-            document,
+            device_document,
             result.warnings,
             {gba::inline_notes::Style::Slash, true});
         print_warnings(result.warnings, error_stream);
@@ -204,10 +347,10 @@ int export_document(const Options& options,
                 "--cb-key is required for encrypted Xploder output");
         }
         const auto result =
-            gba::xploder::export_document(document, export_options);
+            gba::xploder::export_document(device_document, export_options);
         output_stream << gba::inline_notes::apply(
             result.text,
-            document,
+            device_document,
             result.warnings,
             {gba::inline_notes::Style::Slash, true});
         print_warnings(result.warnings, error_stream);
@@ -220,10 +363,10 @@ int export_document(const Options& options,
         export_options.mode = options.ez_mode;
         export_options.combine_multiple_if_groups = true;
         const auto result =
-            gba::ezflash::export_document(document, export_options);
+            gba::ezflash::export_document(device_document, export_options);
         output_stream << gba::inline_notes::apply(
             result.text,
-            document,
+            device_document,
             result.warnings,
             {gba::inline_notes::Style::Hash, true});
         print_warnings(result.warnings, error_stream);

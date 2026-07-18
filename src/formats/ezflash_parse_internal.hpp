@@ -61,6 +61,7 @@ std::optional<std::vector<ParsedRun>> parse_payload_runs(
 std::vector<ConditionTerm> make_condition_terms(
     const std::vector<ParsedRun>& runs);
 std::optional<OperationKind> condition_kind_for_key(std::string_view key);
+bool condition_key_is_masked(std::string_view key);
 Operation make_payload_operation(OperationKind kind,
                                  std::uint32_t address,
                                  std::vector<std::uint8_t> bytes,
@@ -75,6 +76,18 @@ std::optional<std::vector<std::uint8_t>> parse_byte_tokens(
     std::vector<std::string>& warnings,
     std::size_t line_number,
     std::string_view label);
+std::optional<Operation> parse_width_write_operation(
+    std::string_view name,
+    std::string_view payload,
+    std::vector<std::string>& warnings,
+    std::size_t line_number,
+    std::string_view source_text);
+std::optional<Operation> parse_width_condition_operation(
+    std::string_view name,
+    std::string_view payload,
+    std::vector<std::string>& warnings,
+    std::size_t line_number,
+    std::string_view source_text);
 std::optional<Operation> parse_named_runtime_operation(
     std::string_view name,
     std::string_view payload,

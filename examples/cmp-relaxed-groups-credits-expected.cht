@@ -1,0 +1,27 @@
+// Credits: Shimer
+100% Health=IF:W16,45904,1C00;W8:45924,64;ENDIF;
+// Credits: Shimer
+Low Trial Time=W8:2714,00;W8:270C,01;IF:W16,1DDF8,003C;W8:1DE04,00;ENDIF;
+// Credits: Shimer
+Moon Jump=IFM:W16,80130,0001,0000;W8:1505C,80;ENDIF;
+// Credits: Shimer
+Start With 20 Boxes=IF:W16,26E8,0000;W8:26E8,14;ENDIF;
+
+[Have]
+// Credits: MadCatz
+Golden Aku Aku Mask=W8:26F0,02;
+// Credits: MadCatz
+Invincible Aku Aku Mask=W8:26F0,03;
+// Credits: MadCatz
+Wampa Fruit=W8:26E4,63;
+// Credits: Shimer
+3 Masks (Invincible)=W8:26F0,03;IF:W16,15086,0000;W8:15085,2F;ENDIF;
+// Credits: Shimer
+All Crystals+Relics+Gems=SLIDE:W16,27CC,00000018,00000004,00000000,01FF;
+// Credits: Shimer
+All Gem Shards=W8:27CA,FF;W8:6770,01;
+// Credits: Shimer
+All Powers=W8:27CB,FF;
+// Credits: MadCatz
+Max Boxes Collected=W8:26E8,FF;
+

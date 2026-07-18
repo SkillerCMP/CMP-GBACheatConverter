@@ -41,14 +41,31 @@ Result format(std::string_view input) {
             rows88.push_back(*parsed);
         }
 
-        if (starts_with(line, "ON=") || starts_with(line, "IF=") ||
-            starts_with(line, "IFNE=") || starts_with(line, "IFLT=") ||
-            starts_with(line, "IFGT=") || starts_with(line, "IFLE=") ||
-            starts_with(line, "IFGE=") || starts_with(line, "ADD=") ||
-            starts_with(line, "SUB=") || starts_with(line, "PTR=") ||
-            starts_with(line, "FILL=") || starts_with(line, "SLIDE=") ||
-            starts_with(line, "ROM=") || starts_with(line, "ROMIF=")) {
-            ++ez_rows;
+        const std::size_t equals = line.find('=');
+        if (equals != std::string::npos && equals > 0U &&
+            equals + 1U < line.size()) {
+            const std::string value = text::trim(
+                std::string_view(line).substr(equals + 1U));
+            const std::size_t colon = value.find(':');
+            const std::string_view command = colon == std::string::npos
+                ? std::string_view{} :
+                  std::string_view(value).substr(0U, colon);
+            const bool enhanced =
+                command == "W8" || command == "W16" || command == "W32" ||
+                command == "IF" || command == "IFNE" ||
+                command == "IFLT" || command == "IFGT" ||
+                command == "IFLE" || command == "IFGE" ||
+                command == "IFM" || command == "IFNEM" ||
+                command == "IFLTM" || command == "IFGTM" ||
+                command == "IFLEM" || command == "IFGEM" ||
+                command == "ADD" || command == "SUB" ||
+                command == "PTR" || command == "FILL" ||
+                command == "SLIDE" || command == "ROM" ||
+                command == "ROMIF";
+            const bool original = !enhanced &&
+                value.find(',') != std::string::npos &&
+                text::parse_hex_u32(value.substr(0U, value.find(','))).has_value();
+            if (enhanced || original) ++ez_rows;
         }
     }
 
@@ -61,7 +78,7 @@ Result format(std::string_view input) {
         result.format = Format::EzFlash;
         result.confidence = Confidence::High;
         result.score = ez_rows * 20;
-        result.reasons.push_back("found EZ-Flash Original/Enhanced operation syntax");
+        result.reasons.push_back("found EZ-Flash Original/Enhanced E7 name=commands syntax");
         return result;
     }
 

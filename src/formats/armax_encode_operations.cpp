@@ -255,6 +255,13 @@ bool EntryEncoder::encode_non_condition(
             0U, operation.encoding_parameter);
         return true;
 
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
+    case OperationKind::Transfer:
+    case OperationKind::ReadSubstitute:
+    case OperationKind::CompareReadSubstitute:
     case OperationKind::Unsupported:
         return fail("unsupported source operation");
 

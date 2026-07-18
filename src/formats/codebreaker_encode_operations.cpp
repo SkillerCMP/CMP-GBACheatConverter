@@ -313,6 +313,13 @@ void encode_regular_operation(EncodeState& state,
         // the start of the output stream.
         break;
 
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
+    case OperationKind::Transfer:
+    case OperationKind::ReadSubstitute:
+    case OperationKind::CompareReadSubstitute:
     case OperationKind::Unsupported:
         warn_unsupported(
             state, entry, operation, "unsupported source operation");

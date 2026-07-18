@@ -15,6 +15,7 @@
 namespace gba::ezflash::detail {
 
 inline constexpr std::size_t kEnhancedRuntimeRecordLimit = 128U;
+inline constexpr std::size_t kEnhancedRuntimeWriteWorkLimit = 4096U;
 inline constexpr std::size_t kEnhancedSectionNameLimit = 49U;
 inline constexpr std::size_t kEnhancedPhysicalLineLimit = 298U;
 
@@ -76,7 +77,8 @@ std::size_t runtime_records(const EntryGroups& groups);
 class SectionNameAllocator {
 public:
     explicit SectionNameAllocator(std::size_t maximum_length);
-    std::string make(std::string_view preferred);
+    std::string make(std::string_view preferred,
+                     std::size_t reserved_suffix_bytes = 0U);
 
 private:
     std::size_t maximum_length_;
@@ -155,48 +157,18 @@ void emit_conditional_sections(std::ostringstream& output,
 
 std::string_view condition_key_for_kind(OperationKind kind);
 std::vector<std::uint8_t> operation_payload(const Operation& operation);
-std::string byte_list_suffix(const std::vector<std::uint8_t>& bytes);
+CheatEntry optimize_enhanced_v4_entry(const CheatEntry& entry);
 
-struct EnhancedActionSegment {
-    std::string equals_form;
-    std::string colon_form;
+struct EnhancedEncodedOption {
+    std::vector<std::string> commands;
     std::size_t runtime_records = 0U;
-    bool raw_write = false;
+    std::size_t runtime_write_work = 0U;
 };
 
-std::optional<EnhancedActionSegment> encode_enhanced_action(
-    const Operation& operation,
-    std::vector<std::string>& warnings,
-    std::string_view entry_name);
-
-struct EnhancedConditionBlock {
-    Operation condition;
-    std::vector<Operation> true_actions;
-    std::vector<Operation> false_actions;
-};
-
-struct EnhancedRomGuardBlock {
-    std::vector<ByteWrite> conditions;
-    std::vector<Operation> runtime_actions;
-    std::vector<ByteWrite> rom_patches;
-};
-
-struct EnhancedEntryPlan {
-    std::vector<Operation> direct_actions;
-    std::vector<ByteWrite> direct_rom_patches;
-    std::vector<EnhancedConditionBlock> conditions;
-    std::vector<EnhancedRomGuardBlock> rom_guards;
-    bool compatibility_error = false;
-};
-
-std::optional<std::vector<ByteWrite>> flatten_condition_operation(
-    const Operation& operation);
-EnhancedEntryPlan build_enhanced_v3_plan(
+std::optional<EnhancedEncodedOption> encode_enhanced_v4_option(
     const CheatEntry& entry,
     std::vector<std::string>& warnings);
-std::size_t enhanced_action_records(const Operation& operation);
-std::size_t enhanced_plan_records(const EnhancedEntryPlan& plan);
-Result export_enhanced_v3(const CheatDocument& document,
+Result export_enhanced_v4(const CheatDocument& document,
                           const Options& options);
 
 } // namespace gba::ezflash::detail

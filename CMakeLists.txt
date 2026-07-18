@@ -5,10 +5,10 @@ cmake_minimum_required(VERSION 3.20)
 # cannot race while regenerating configured version resources.
 set(CMAKE_SUPPRESS_REGENERATION ON)
 
-project(GbaCheatConverter VERSION 2.0.0 LANGUAGES CXX)
+project(GbaCheatConverter VERSION 2.15.0 LANGUAGES CXX)
 
-set(GBA_DISPLAY_VERSION "2.00")
-set(GBA_FILE_VERSION "2.00.0.0")
+set(GBA_DISPLAY_VERSION "2.15")
+set(GBA_FILE_VERSION "2.15.0.0")
 if(PROJECT_VERSION_TWEAK STREQUAL "")
     set(GBA_VERSION_TWEAK 0)
 else()
@@ -53,6 +53,8 @@ add_library(gba_cheat_core
     src/core/text_code_rows.cpp
     src/core/text_headers.cpp
     src/core/text_gamehacking.cpp
+    src/core/cmp_input.cpp
+    src/core/cmp_output.cpp
     src/core/detect.cpp
     src/core/detect_common.cpp
     src/core/detect_crypto.cpp
@@ -89,10 +91,16 @@ add_library(gba_cheat_core
     src/formats/armax_parse.cpp
     src/formats/armax_transform.cpp
     src/formats/xploder.cpp
+    src/formats/vba_clt_codec.cpp
+    src/formats/retroarch_cht.cpp
+    src/formats/mgba_cheats.cpp
+    src/formats/mister_gg.cpp
+    src/formats/mednafen_cht.cpp
     src/formats/ezflash.cpp
     src/formats/ezflash_groups.cpp
     src/formats/ezflash_tokens.cpp
     src/formats/ezflash_enhanced_plan.cpp
+    src/formats/ezflash_optimize.cpp
     src/formats/ezflash_enhanced_emit.cpp
     src/formats/ezflash_parse.cpp
     src/formats/ezflash_parse_runs.cpp
@@ -114,6 +122,7 @@ add_library(gba_cheat_core
     src/import/native_input_mgba.cpp
     src/import/native_input_libretro.cpp
     src/import/native_input_mister.cpp
+    src/import/native_input_mednafen.cpp
     src/cli/cli_app.cpp
     src/cli/cli_arguments.cpp
     src/cli/cli_io.cpp
@@ -127,14 +136,12 @@ target_include_directories(gba_cheat_core PUBLIC
 )
 gba_enable_warnings(gba_cheat_core)
 
-if(NOT WIN32)
-    add_executable(gba-cheat-converter-cli src/cli/main.cpp)
-    target_link_libraries(gba-cheat-converter-cli PRIVATE gba_cheat_core)
-    set_target_properties(gba-cheat-converter-cli PROPERTIES
-        OUTPUT_NAME "GbaCheatConverterCLI"
-    )
-    gba_enable_warnings(gba-cheat-converter-cli)
-endif()
+add_executable(gba-cheat-converter-cli src/cli/main.cpp)
+target_link_libraries(gba-cheat-converter-cli PRIVATE gba_cheat_core)
+set_target_properties(gba-cheat-converter-cli PROPERTIES
+    OUTPUT_NAME "GbaCheatConverterCLI"
+)
+gba_enable_warnings(gba-cheat-converter-cli)
 
 if(WIN32)
     enable_language(RC)
@@ -212,21 +219,30 @@ add_executable(gba-cheat-tests
     tests/test_armax.cpp
     tests/test_xploder.cpp
     tests/test_ezflash_original.cpp
-    tests/test_ezflash_fix8.cpp
+    tests/test_ezflash_grouped.cpp
     tests/test_ezflash_enhanced.cpp
     tests/test_native_outputs.cpp
+    tests/test_retroarch.cpp
+    tests/test_mgba.cpp
+    tests/test_mister.cpp
+    tests/test_mednafen.cpp
+    tests/test_integration.cpp
     tests/test_native_inputs.cpp
+    tests/test_vba_clt.cpp
+    tests/test_cmp.cpp
 )
 target_link_libraries(gba-cheat-tests PRIVATE gba_cheat_core)
 gba_enable_warnings(gba-cheat-tests)
 add_test(NAME gba-cheat-tests COMMAND gba-cheat-tests)
-if(WIN32)
-    add_test(NAME gba-cheat-cli-version
-             COMMAND GbaCheatConverter --version)
-else()
-    add_test(NAME gba-cheat-cli-version
-             COMMAND GbaCheatConverterCLI --version)
-endif()
+add_test(NAME gba-cheat-cli-version
+         COMMAND gba-cheat-converter-cli --version)
 set_tests_properties(gba-cheat-cli-version PROPERTIES
-    PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.00"
+    PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.15"
 )
+if(WIN32)
+    add_test(NAME gba-cheat-unified-cli-version
+             COMMAND GbaCheatConverter --version)
+    set_tests_properties(gba-cheat-unified-cli-version PROPERTIES
+        PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.15"
+    )
+endif()

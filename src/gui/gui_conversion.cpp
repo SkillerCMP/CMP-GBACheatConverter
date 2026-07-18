@@ -29,12 +29,18 @@ bool perform_conversion(bool modal_errors) {
             return false;
         }
 
+        const gba::cmp::NormalizedInput cmp_input =
+            gba::cmp::normalize_input(input);
+        const std::string& semantic_input =
+            cmp_input.recognized ? cmp_input.text : input;
+
         GuiFormat input_format = g_input_format;
         const GuiFormat output = g_output_format;
         std::wstring detection_status;
 
         if (input_format == GuiFormat::AutoDetect) {
-            const gba::detect::Result detected = gba::detect::format(input);
+            const gba::detect::Result detected =
+                gba::detect::format(semantic_input);
             const auto mapped = gui_format_from_detection(detected.format);
             if (!mapped) {
                 std::string message =
@@ -51,23 +57,22 @@ bool perform_conversion(bool modal_errors) {
             update_seed_controls();
             sync_input_seed_from_text(true);
             detection_status =
-                L"Detected " + format_name(input_format, false) +
-                L" (" +
+                L"Detected " + format_name(input_format, false) + L" (" +
                 utf8_to_wide(gba::detect::confidence_name(
                     detected.confidence)) +
                 L" confidence). ";
         }
 
-        if (is_armax_family(input_format) && is_armax_family(output)) {
+        if (!cmp_input.recognized && !g_cmp_output &&
+            is_armax_family(input_format) && is_armax_family(output)) {
             const auto transformed = gba::armax::transform_text(
                 input, is_armax_encrypted(input_format),
                 is_armax_encrypted(output));
-            const std::string annotated =
-                gba::inline_notes::apply(
-                    transformed.text,
-                    gba::CheatDocument{},
-                    transformed.warnings,
-                    {gba::inline_notes::Style::Slash, true});
+            const std::string annotated = gba::inline_notes::apply(
+                transformed.text,
+                gba::CheatDocument{},
+                transformed.warnings,
+                {gba::inline_notes::Style::Slash, true});
             set_editor_text(g_output_edit, annotated);
             if (transformed.warnings.empty()) {
                 set_status(detection_status +
@@ -87,12 +92,13 @@ bool perform_conversion(bool modal_errors) {
         std::wstring input_seed_status;
         switch (input_format) {
         case GuiFormat::FcdRaw:
-            document = gba::codebreaker::parse(input, {false});
+            document = gba::codebreaker::parse(semantic_input, {false});
             break;
         case GuiFormat::FcdEncrypted: {
             sync_input_seed_from_text(false);
             const bool manual_key = manual_input_key_enabled();
-            const auto embedded = gba::codebreaker::find_embedded_seed(input);
+            const auto embedded =
+                gba::codebreaker::find_embedded_seed(semantic_input);
             const auto input_seed = parse_seed_edit(g_input_seed_edit);
 
             if (manual_key && !input_seed) {
@@ -108,8 +114,8 @@ bool perform_conversion(bool modal_errors) {
             }
 
             document = gba::codebreaker::parse(
-                input, {true, manual_key ? input_seed : std::nullopt,
-                        manual_key});
+                semantic_input,
+                {true, manual_key ? input_seed : std::nullopt, manual_key});
             const auto active_seed = manual_key ? input_seed : embedded;
             if (active_seed) {
                 input_seed_status =
@@ -119,23 +125,37 @@ bool perform_conversion(bool modal_errors) {
             break;
         }
         case GuiFormat::GameSharkRaw:
-            document = gba::gameshark::parse(input, {false});
+            document = gba::gameshark::parse(semantic_input, {false});
             break;
         case GuiFormat::GameSharkEncrypted:
-            document = gba::gameshark::parse(input, {true});
+            document = gba::gameshark::parse(semantic_input, {true});
             break;
         case GuiFormat::ActionReplayMaxRaw:
-            document = gba::armax::parse(input, {false});
+            document = gba::armax::parse(semantic_input, {false});
             break;
         case GuiFormat::ActionReplayMaxEncrypted:
-            document = gba::armax::parse(input, {true});
+            document = gba::armax::parse(semantic_input, {true});
             break;
         case GuiFormat::EzFlash:
-            document = gba::ezflash::parse(input);
+            document = gba::ezflash::parse(semantic_input);
             break;
         case GuiFormat::AutoDetect:
             throw std::runtime_error(
                 "Auto Detect did not resolve to a concrete input format");
+        }
+        if (cmp_input.recognized) {
+            document = gba::cmp::attach_layout(cmp_input, std::move(document));
+        }
+
+        std::optional<gba::cmp::PreparedOutput> cmp_output;
+        gba::CheatDocument output_document;
+        if (output == GuiFormat::EzFlash) {
+            output_document = gba::cmp::prepare_for_ezflash(document);
+        } else if (g_cmp_output) {
+            cmp_output = gba::cmp::prepare_output(document);
+            output_document = cmp_output->document;
+        } else {
+            output_document = gba::cmp::flatten_for_device_output(document);
         }
 
         std::vector<std::string> warnings;
@@ -157,7 +177,7 @@ bool perform_conversion(bool modal_errors) {
             }
 
             const auto converted =
-                gba::codebreaker::export_document(document, options);
+                gba::codebreaker::export_document(output_document, options);
             converted_text = converted.text;
             warnings = converted.warnings;
             success = converted.success;
@@ -169,7 +189,7 @@ bool perform_conversion(bool modal_errors) {
             gba::gameshark::ExportOptions options;
             options.encrypted = output == GuiFormat::GameSharkEncrypted;
             const auto converted =
-                gba::gameshark::export_document(document, options);
+                gba::gameshark::export_document(output_document, options);
             converted_text = converted.text;
             warnings = converted.warnings;
             success = converted.success;
@@ -181,7 +201,7 @@ bool perform_conversion(bool modal_errors) {
             gba::armax::ExportOptions options;
             options.encrypted = output == GuiFormat::ActionReplayMaxEncrypted;
             const auto converted =
-                gba::armax::export_document(document, options);
+                gba::armax::export_document(output_document, options);
             converted_text = converted.text;
             warnings = converted.warnings;
             success = converted.success;
@@ -194,14 +214,14 @@ bool perform_conversion(bool modal_errors) {
             options.mode = g_ezflash_mode;
             options.combine_multiple_if_groups = true;
             const auto converted =
-                gba::ezflash::export_document(document, options);
+                gba::ezflash::export_document(output_document, options);
             converted_text = converted.text;
             warnings = converted.warnings;
             success = converted.success;
             completed_status =
                 g_ezflash_mode == gba::ezflash::Mode::Original
                     ? L"Converted to EZ-Flash Original format (ON= only)."
-                    : L"Converted to EZ-Flash Enhanced v3 format.";
+                    : L"Converted to EZ-Flash Enhanced E7 revision-6 format.";
         } else {
             throw std::runtime_error("Unknown output format selection");
         }
@@ -212,9 +232,16 @@ bool perform_conversion(bool modal_errors) {
                 : gba::inline_notes::Style::Slash;
         converted_text = gba::inline_notes::apply(
             converted_text,
-            document,
+            output_document,
             warnings,
             {note_style, true});
+
+        if (cmp_output) {
+            converted_text =
+                gba::cmp::render_output(converted_text, *cmp_output);
+            gba::cmp::restore_warning_names(warnings, *cmp_output);
+            completed_status += L" CMP formatting applied.";
+        }
 
         set_editor_text(g_output_edit, converted_text);
         if (warnings.empty()) {

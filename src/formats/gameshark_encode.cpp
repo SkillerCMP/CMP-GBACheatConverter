@@ -156,6 +156,10 @@ std::vector<RawLine> encode_operation(const Operation& operation,
     case OperationKind::IfNotEqual:
     case OperationKind::IfLessOrEqual:
     case OperationKind::IfGreaterOrEqual: {
+        if (operation.condition_has_mask) {
+            unsupported("masked condition has no exact GameShark/AR GBX v1/v2 equivalent");
+            break;
+        }
         if (operation.width != 2U) {
             unsupported("GameShark/AR GBX conditions require 16-bit values");
             break;
@@ -305,6 +309,13 @@ std::vector<RawLine> encode_operation(const Operation& operation,
                operation.value);
         break;
 
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
+    case OperationKind::Transfer:
+    case OperationKind::ReadSubstitute:
+    case OperationKind::CompareReadSubstitute:
     case OperationKind::Unsupported:
         unsupported("unsupported source operation");
         break;

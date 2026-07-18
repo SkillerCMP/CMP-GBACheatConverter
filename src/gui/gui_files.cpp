@@ -62,25 +62,43 @@ gba::CheatDocument parse_current_output_document() {
             "The output window is empty. Convert or paste output first.");
     }
 
+    const gba::cmp::NormalizedInput cmp_input =
+        gba::cmp::normalize_input(output);
+    const std::string& semantic_output =
+        cmp_input.recognized ? cmp_input.text : output;
+
+    gba::CheatDocument document;
     switch (g_output_format) {
     case GuiFormat::FcdRaw:
-        return gba::codebreaker::parse(output, {false});
-    case GuiFormat::FcdEncrypted:
-        return gba::codebreaker::parse(output, {true});
-    case GuiFormat::GameSharkRaw:
-        return gba::gameshark::parse(output, {false});
-    case GuiFormat::GameSharkEncrypted:
-        return gba::gameshark::parse(output, {true});
-    case GuiFormat::ActionReplayMaxRaw:
-        return gba::armax::parse(output, {false});
-    case GuiFormat::ActionReplayMaxEncrypted:
-        return gba::armax::parse(output, {true});
-    case GuiFormat::EzFlash:
-        return gba::ezflash::parse(output);
-    case GuiFormat::AutoDetect:
+        document = gba::codebreaker::parse(semantic_output, {false});
         break;
+    case GuiFormat::FcdEncrypted:
+        document = gba::codebreaker::parse(semantic_output, {true});
+        break;
+    case GuiFormat::GameSharkRaw:
+        document = gba::gameshark::parse(semantic_output, {false});
+        break;
+    case GuiFormat::GameSharkEncrypted:
+        document = gba::gameshark::parse(semantic_output, {true});
+        break;
+    case GuiFormat::ActionReplayMaxRaw:
+        document = gba::armax::parse(semantic_output, {false});
+        break;
+    case GuiFormat::ActionReplayMaxEncrypted:
+        document = gba::armax::parse(semantic_output, {true});
+        break;
+    case GuiFormat::EzFlash:
+        document = gba::ezflash::parse(semantic_output);
+        break;
+    case GuiFormat::AutoDetect:
+        throw std::runtime_error(
+            "The current output format cannot be parsed.");
     }
-    throw std::runtime_error("The current output format cannot be parsed.");
+
+    if (cmp_input.recognized) {
+        document = gba::cmp::attach_layout(cmp_input, std::move(document));
+    }
+    return document;
 }
 
 std::optional<std::string> md5_file(const std::wstring& path) {
@@ -322,8 +340,13 @@ void save_native_output(int command) {
                 std::filesystem::path(rom_path.data()).stem().wstring());
         }
 
+        const gba::CheatDocument native_document =
+            spec->format == gba::output_modes::Format::EzFlashCht
+                ? gba::cmp::prepare_for_ezflash(document)
+                : gba::cmp::flatten_for_device_output(document);
         gba::output_modes::Result result =
-            gba::output_modes::export_document(document, spec->format, options);
+            gba::output_modes::export_document(
+                native_document, spec->format, options);
         if (spec->format != gba::output_modes::Format::EzFlashCht) {
             result.warnings.insert(result.warnings.begin(),
                                    document.warnings.begin(),
@@ -420,6 +443,17 @@ bool load_input_path(const std::wstring& path, bool dropped) {
             set_status(L"Import failed: " + message);
             return false;
         }
+        if (imported.text.empty()) {
+            const std::wstring message =
+                L"This native file was parsed successfully, but its records "
+                L"cannot be represented safely in the GUI device-code editor. "
+                L"Use the CLI native-to-native path to preserve them exactly.";
+            MessageBoxW(g_main, message.c_str(), L"Native-only cheat records",
+                        MB_OK | MB_ICONWARNING);
+            set_status(L"Native file requires CLI lossless conversion.");
+            show_native_import_warnings(imported);
+            return false;
+        }
         const auto format = gui_format_from_native_input(imported.input_format);
         if (!format) {
             MessageBoxW(g_main,
@@ -470,7 +504,7 @@ void open_input_file() {
     dialog.lStructSize = sizeof(dialog);
     dialog.hwndOwner = g_main;
     dialog.lpstrFilter =
-        L"Supported cheat files\0*.txt;*.cht;*.ini;*.dsc;*.clt;*.cheats;*.zip\0"
+        L"Supported cheat files\0*.txt;*.cmp;*.cht;*.ini;*.dsc;*.clt;*.cheats;*.zip\0"
         L"Native Save Output As files\0*.cht;*.dsc;*.clt;*.cheats;*.zip\0"
         L"All files\0*.*\0";
     dialog.lpstrFile = path.data();
@@ -529,8 +563,11 @@ void swap_input_output() {
             const std::string input =
                 gba::text::cleanup_gamehacking_org_blocks(
                     normalize_from_edit(old_input));
+            const gba::cmp::NormalizedInput cmp_input =
+                gba::cmp::normalize_input(input);
             const auto detected = gui_format_from_detection(
-                gba::detect::format(input).format);
+                gba::detect::format(
+                    cmp_input.recognized ? cmp_input.text : input).format);
             if (!detected) {
                 MessageBoxW(
                     g_main,

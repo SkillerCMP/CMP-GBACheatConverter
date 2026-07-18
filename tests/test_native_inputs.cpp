@@ -116,14 +116,14 @@ void test_native_input_imports() {
         const auto imported = export_and_import(
             document, output_modes::Format::VisualBoyAdvanceClt,
             "Test Game.clt");
-        require(imported.input_format == native_input::InputFormat::FcdRaw,
-                "VBA .clt did not select raw FCD input");
+        require(imported.input_format ==
+                    native_input::InputFormat::ActionReplayMaxRaw,
+                "VBA-M .clt did not select a lossless mixed semantic output");
         const auto parsed = parse_native_import(imported);
-        require(parsed.warnings.empty() && parsed.entries.size() == 1U,
-                "VBA .clt imported text did not parse cleanly");
-        require(direct_write_bytes(parsed) ==
-                    direct_write_bytes(CheatDocument{{document.entries[0]}, {}}),
-                "VBA .clt import changed direct-write bytes");
+        require(parsed.warnings.empty() && parsed.entries.size() == 3U,
+                "VBA-M .clt imported text did not parse cleanly");
+        require(direct_write_bytes(parsed) == direct_write_bytes(document),
+                "VBA-M .clt import changed direct-write bytes");
     }
     {
         output_modes::Options options;
@@ -174,8 +174,9 @@ void test_native_input_imports() {
         const auto imported = export_and_import(
             document, output_modes::Format::MednafenCht,
             "Test Game.cht", options);
-        require(imported.input_format == native_input::InputFormat::FcdRaw,
-                "Mednafen .cht did not select raw FCD input");
+        require(imported.input_format ==
+                    native_input::InputFormat::ActionReplayMaxRaw,
+                "Mednafen .cht did not select an exact raw semantic input");
         const auto parsed = parse_native_import(imported);
         require(parsed.warnings.empty() && parsed.entries.size() == 1U,
                 "Mednafen import did not preserve its direct-write entry");

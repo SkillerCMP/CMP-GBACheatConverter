@@ -92,22 +92,26 @@ std::string kernel_section_key(std::string_view name) {
 SectionNameAllocator::SectionNameAllocator(std::size_t maximum_length)
     : maximum_length_(std::max<std::size_t>(1U, maximum_length)) {}
 
-std::string SectionNameAllocator::make(std::string_view preferred) {
+std::string SectionNameAllocator::make(
+    std::string_view preferred,
+    std::size_t reserved_suffix_bytes) {
     const std::string base = sanitize_section_name(preferred);
+    const std::size_t available = reserved_suffix_bytes >= maximum_length_
+        ? 1U : maximum_length_ - reserved_suffix_bytes;
 
     for (std::size_t index = 1U;; ++index) {
         const std::string suffix =
             index == 1U ? std::string{} : "~" + std::to_string(index);
         const std::size_t prefix_limit =
-            suffix.size() >= maximum_length_
-                ? 0U
-                : maximum_length_ - suffix.size();
+            suffix.size() >= available ? 0U : available - suffix.size();
         std::string candidate =
             safe_utf8_prefix(base, prefix_limit) + suffix;
         if (candidate.empty()) {
-            candidate = safe_utf8_prefix("EZ", maximum_length_);
+            candidate = safe_utf8_prefix("EZ", available);
         }
 
+        // E7 removes |ONE before command lookup, so uniqueness is based on
+        // the visible normalized group name rather than the physical suffix.
         const std::string key = kernel_section_key(candidate);
         if (used_.insert(key).second) {
             return candidate;
@@ -136,11 +140,15 @@ std::vector<std::string> emit_byte_run_tokens(
         std::ostringstream token;
         token << text::hex(*compact, 1);
 
-        std::uint32_t expected = input[index].address;
+        std::uint32_t expected = *compact;
         std::size_t count = 0U;
-        while (index < input.size() &&
-               input[index].address == expected &&
-               count < kMaximumBytesPerRun) {
+        while (index < input.size() && count < kMaximumBytesPerRun) {
+            const auto current = condition
+                ? compact_condition_address(input[index].address)
+                : compact_write_address(input[index].address);
+            if (!current || *current != expected) {
+                break;
+            }
             token << ',' << text::hex(input[index].value, 2);
             ++expected;
             ++index;
@@ -243,12 +251,12 @@ std::optional<EncodedGroup> encode_group(
     encoded.write_tokens = write_tokens;
     encoded.full = encoded.prefix + join_tokens(write_tokens);
 
-    // Enhanced v3's menu scanner reads at most 298 visible characters from the
+    // Enhanced E7's menu scanner reads at most 298 visible characters from the
     // first physical line. The complete condition and ON= token must be on
     // that first line; only the final write list may continue below it.
     if (encoded.prefix.size() > maximum_line_length) {
         warnings.push_back(
-            "EZ-Flash IF condition is too long for the Enhanced v3 menu scanner");
+            "EZ-Flash IF condition is too long for the Enhanced E7 menu scanner");
         return std::nullopt;
     }
 
@@ -326,7 +334,7 @@ void emit_direct_section(std::ostringstream& output,
     if (!emit_wrapped_key(section, "ON=", tokens, maximum_line_length)) {
         result.warnings.push_back(
             entry.name +
-            ": direct write line cannot fit the Enhanced v3 physical-line limit");
+            ": direct write line cannot fit the Enhanced E7 physical-line limit");
         result.success = false;
         return;
     }
@@ -459,7 +467,7 @@ bool emit_conditional_groups_with_rom_tail(
     }
     line += "ROM=";
 
-    // Enhanced v3's IF parser requires the ;ROM= marker to be part of the
+    // Enhanced E7's IF parser requires the ;ROM= marker to be part of the
     // first physical key row. The ROM byte list itself may continue below it.
     if (line.size() > maximum_line_length) {
         return false;
@@ -611,7 +619,7 @@ void emit_conditional_sections(std::ostringstream& output,
                 section, chunks[index], maximum_line_length)) {
             result.warnings.push_back(
                 entry.name +
-                ": conditional group cannot fit the Enhanced v3 physical-line "
+                ": conditional group cannot fit the Enhanced E7 physical-line "
                 "layout");
             result.success = false;
             continue;

@@ -40,6 +40,10 @@ bool is_condition_kind(OperationKind kind) {
     case OperationKind::IfLessOrEqual:
     case OperationKind::IfAnd:
     case OperationKind::IfNand:
+    case OperationKind::IfXor:
+    case OperationKind::IfNotXor:
+    case OperationKind::IfOr:
+    case OperationKind::IfNotOr:
     case OperationKind::IfDeviceButton:
         return true;
     default:
@@ -241,10 +245,13 @@ void decode_line(CheatEntry& entry,
 
     case 0xD:
         if (address == 0x20U) {
-            entry.operations.push_back(
-                make_operation(OperationKind::IfNand, line,
-                               0x04000130U, line.op2, 2,
-                               "CodeBreaker special button condition"));
+            Operation condition =
+                make_operation(OperationKind::IfEqual, line,
+                               0x04000130U, 0U, 2,
+                               "CodeBreaker special masked button condition");
+            condition.condition_has_mask = true;
+            condition.condition_mask = line.op2;
+            entry.operations.push_back(std::move(condition));
         } else {
             entry.operations.push_back(
                 make_operation(OperationKind::Unsupported, line,
