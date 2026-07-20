@@ -14,6 +14,13 @@ enum class Mode {
     Enhanced
 };
 
+enum class Syntax {
+    Unknown,
+    Original,
+    Enhanced,
+    Mixed
+};
+
 struct Options {
     std::size_t maximum_runtime_records = 128;
     std::size_t maximum_section_name_length = 49;
@@ -27,6 +34,8 @@ struct Result {
     std::vector<std::string> warnings;
     bool success = true;
 };
+
+Syntax detect_syntax(std::string_view input);
 
 CheatDocument parse(std::string_view input);
 

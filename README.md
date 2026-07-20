@@ -1,6 +1,6 @@
-# 🎮 GBA Cheat Converter v2.15
+# 🎮 GBA Cheat Converter v2.17
 
-> **v2.15** fixes relaxed CMP-style `!Group:` / `!!` conversion to EZ-Flash Enhanced E7 and cleans inline `, by Author , Crypt_Device` metadata into source-safe `// Credits: Author` comments above each code row.
+> **v2.17** adds one-way EZ-Flash migration from stock Original `ON=` byte lists to the latest Enhanced E7 revision-6 format, with safe W16/W32, FILL, and SLIDE condensation. In the GUI, Enhanced mode auto-migrates pasted/opened Original files; Original mode preserves EZ-Flash input unchanged.
 
 <p align="center">
   <strong>Convert, clean, detect, import, and export Game Boy Advance cheat codes.</strong>
@@ -25,6 +25,7 @@ cheat-device families:
 - **GameShark Advance / Action Replay GBX**
 - **Action Replay MAX / Pro Action Replay v3**
 - **EZ-Flash Original**
+- **Original → Enhanced E7 migration** with safe W16/W32, FILL, and SLIDE condensation
 - **EZ-Flash Omega DE Enhanced 1.06E7**
 
 It supports raw and encrypted codes, automatic format detection, clipboard
@@ -50,7 +51,7 @@ graphical and command-line workflows.
 | 📝 **Inline conversion notes** | Places compatibility warnings beside the affected code. |
 | 🛡️ **Dependency safety** | Never exports controlled writes without their required condition, hook, pointer, patch, or block. |
 | 🖥️ **GUI and dedicated CLI** | Windows builds include the dual-mode GUI executable and a dedicated console executable for BAT files and automation. |
-| 🧪 **Regression-tested** | Includes 174 semantic tests for parsers, ciphers, exporters, importers, optimization, containers, and file-output safety. |
+| 🧪 **Regression-tested** | Includes 178 semantic tests for parsers, ciphers, exporters, importers, optimization, containers, and file-output safety. |
 
 ---
 
@@ -237,6 +238,7 @@ Native files are generated from the **current Output editor**, including manual
 edits.
 
 - EZ-Flash output uses the selected Original or Enhanced mode.
+- `--to ezflash-enhanced` is a direct alias for migrating stock Original `.cht` files to current E7 output.
 - Targets supporting multiple families choose the exact FCD or PAR v3 form per cheat.
 - RetroArch re-export preserves imported handler-0 and handler-1 records exactly, including toggle state and native metadata.
 - Targets omit complete entries when their behavior cannot be represented safely.
@@ -747,7 +749,7 @@ build-windows-x64.cmd -KeepBuild
 
 ## 🧪 Testing and Safety
 
-The v2.15 source contains **174 semantic tests** covering:
+The v2.17 source contains **178 semantic tests** covering:
 
 - Raw and encrypted parsers
 - Cipher reseeding
@@ -765,6 +767,7 @@ The v2.15 source contains **174 semantic tests** covering:
 - Inline note placement
 - CLI success and failure behavior
 - Direct `--output` file creation, binary stdout guarding, and preservation of existing files after failed conversions
+- Canonical Action Replay MAX Raw condition operands at 8-, 16-, and 32-bit widths without changing non-condition upper fields
 
 ---
 

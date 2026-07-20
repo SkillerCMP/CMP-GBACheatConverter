@@ -81,6 +81,8 @@ std::uint32_t decode_address(std::uint32_t encoded);
 std::optional<std::uint32_t> encode_address(std::uint32_t address);
 std::uint32_t width_mask(std::uint8_t width);
 std::uint32_t width_bits(std::uint8_t width);
+std::uint32_t canonicalize_raw_operand(std::uint32_t op1,
+                                       std::uint32_t op2);
 Operation make_operation(OperationKind kind,
                          const RawLine& line,
                          std::uint32_t address,

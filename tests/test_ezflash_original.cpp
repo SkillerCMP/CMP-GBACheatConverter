@@ -118,4 +118,47 @@ void test_ezflash_compound_condition_does_not_leak() {
             "Nested conditions did not remain dependent in AR MAX output");
 }
 
+void test_ezflash_original_syntax_detection() {
+    require(gba::ezflash::detect_syntax(
+                "[Original]\nON=2100,11,22;\n") ==
+                gba::ezflash::Syntax::Original,
+            "Original EZ-Flash syntax was not detected");
+    require(gba::ezflash::detect_syntax(
+                "Enhanced=W16:2100,2211;\n") ==
+                gba::ezflash::Syntax::Enhanced,
+            "Enhanced EZ-Flash syntax was not detected");
+    require(gba::ezflash::detect_syntax(
+                "[Original]\nON=2100,11;\nEnhanced=W8:2200,22;\n") ==
+                gba::ezflash::Syntax::Mixed,
+            "Mixed EZ-Flash syntax was not detected");
+}
+
+void test_ezflash_original_to_enhanced_condenses_safely() {
+    const std::string input =
+        "[Fill Test]\n"
+        "ON=2100,AA,AA,AA,AA,AA,AA,AA,AA,AA,AA,AA,AA;\n"
+        "[Slide Test]\n"
+        "ON=2200,00,01,02,03,04,05,06,07,08,09,0A,0B,0C,0D,0E,0F;\n"
+        "[Mixed]\n"
+        "ON=2300,11,22,33,44,55,66;\n";
+    const auto document = gba::ezflash::parse(input);
+    const auto output = gba::ezflash::export_document(document);
+    require(output.success && output.warnings.empty(),
+            "Original EZ-Flash migration produced warnings");
+    require(output.text.find(
+                "Fill Test=FILL:W32,2100,00000003,AAAAAAAA;") !=
+                std::string::npos,
+            "Repeated original bytes were not condensed to FILL");
+    require(output.text.find(
+                "Slide Test=SLIDE:W32,2200,00000004,00000004,04040404,03020100;") !=
+                std::string::npos,
+            "Sequential original bytes were not condensed to SLIDE");
+    require(output.text.find(
+                "Mixed=W32:2300,44332211;W16:2304,6655;") !=
+                std::string::npos,
+            "General original byte lists were not condensed to W32/W16");
+    require(output.text.find("[Fill Test]") == std::string::npos,
+            "Stock [Code]/ON= input was incorrectly retained as an E7 group");
+}
+
 } // namespace gba::tests

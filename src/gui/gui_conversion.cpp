@@ -63,6 +63,24 @@ bool perform_conversion(bool modal_errors) {
                 L" confidence). ";
         }
 
+        const gba::ezflash::Syntax ezflash_input_syntax =
+            input_format == GuiFormat::EzFlash
+                ? gba::ezflash::detect_syntax(semantic_input)
+                : gba::ezflash::Syntax::Unknown;
+
+        // Original EZ-Flash is a source-preservation mode in the GUI.  The
+        // only automatic migration is Original -> current Enhanced E7.
+        if (!cmp_input.recognized && !g_cmp_output &&
+            input_format == GuiFormat::EzFlash &&
+            output == GuiFormat::EzFlash &&
+            g_ezflash_mode == gba::ezflash::Mode::Original) {
+            set_editor_text(g_output_edit, semantic_input);
+            set_status(detection_status +
+                L"EZ-Flash Original selected; EZ-Flash input was preserved without conversion.");
+            g_in_convert = false;
+            return true;
+        }
+
         if (!cmp_input.recognized && !g_cmp_output &&
             is_armax_family(input_format) && is_armax_family(output)) {
             const auto transformed = gba::armax::transform_text(
@@ -218,10 +236,17 @@ bool perform_conversion(bool modal_errors) {
             converted_text = converted.text;
             warnings = converted.warnings;
             success = converted.success;
-            completed_status =
-                g_ezflash_mode == gba::ezflash::Mode::Original
-                    ? L"Converted to EZ-Flash Original format (ON= only)."
-                    : L"Converted to EZ-Flash Enhanced E7 revision-6 format.";
+            if (g_ezflash_mode == gba::ezflash::Mode::Original) {
+                completed_status =
+                    L"Converted to EZ-Flash Original format (ON= only).";
+            } else if (input_format == GuiFormat::EzFlash &&
+                       ezflash_input_syntax == gba::ezflash::Syntax::Original) {
+                completed_status =
+                    L"Detected EZ-Flash Original input and migrated it to Enhanced E7 revision-6 format.";
+            } else {
+                completed_status =
+                    L"Converted to EZ-Flash Enhanced E7 revision-6 format.";
+            }
         } else {
             throw std::runtime_error("Unknown output format selection");
         }

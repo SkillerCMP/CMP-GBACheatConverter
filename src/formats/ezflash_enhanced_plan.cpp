@@ -77,17 +77,138 @@ std::optional<std::string> encode_scalar_write(
            scalar_value(value, width) + ';';
 }
 
+struct PayloadEncodingPlan {
+    std::vector<std::string> commands;
+    std::size_t runtime_records = 0U;
+    std::size_t runtime_write_work = 0U;
+    std::size_t text_length = 0U;
+};
+
+std::uint32_t payload_value(const std::vector<std::uint8_t>& bytes,
+                            std::size_t offset,
+                            std::uint8_t width) {
+    std::uint32_t value = 0U;
+    for (std::uint8_t index = 0U; index < width; ++index) {
+        value |= static_cast<std::uint32_t>(bytes[offset + index])
+                 << (index * 8U);
+    }
+    return value;
+}
+
+bool compact_sequence_is_contiguous(std::uint32_t address,
+                                    std::uint8_t width,
+                                    std::size_t count) {
+    const auto first = compact_write_address(address);
+    if (!first || !aligned(address, width)) return false;
+    for (std::size_t index = 0U; index < count; ++index) {
+        const std::uint64_t full = static_cast<std::uint64_t>(address) +
+            static_cast<std::uint64_t>(index) * width;
+        if (full > std::numeric_limits<std::uint32_t>::max()) return false;
+        const auto compact = compact_write_address(
+            static_cast<std::uint32_t>(full));
+        const std::uint64_t expected = static_cast<std::uint64_t>(*first) +
+            static_cast<std::uint64_t>(index) * width;
+        if (!compact || static_cast<std::uint64_t>(*compact) != expected) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool plan_is_better(const PayloadEncodingPlan& candidate,
+                    const PayloadEncodingPlan& current) {
+    if (candidate.runtime_records != current.runtime_records) {
+        return candidate.runtime_records < current.runtime_records;
+    }
+    if (candidate.runtime_write_work != current.runtime_write_work) {
+        return candidate.runtime_write_work < current.runtime_write_work;
+    }
+    return candidate.text_length < current.text_length;
+}
+
+std::optional<PayloadEncodingPlan> compact_pattern_plan(
+    const Operation& operation,
+    const std::vector<std::uint8_t>& bytes,
+    const PayloadEncodingPlan& scalar) {
+    std::optional<PayloadEncodingPlan> best;
+    constexpr std::uint8_t widths[] = {4U, 2U, 1U};
+
+    for (const std::uint8_t width : widths) {
+        if (bytes.size() % width != 0U) continue;
+        const std::size_t count = bytes.size() / width;
+        if (count < 2U || count > 0xFFFFFFFFULL ||
+            !compact_sequence_is_contiguous(operation.address, width, count)) {
+            continue;
+        }
+        const auto compact = compact_write_address(operation.address);
+        if (!compact) continue;
+
+        std::vector<std::uint32_t> values;
+        values.reserve(count);
+        for (std::size_t index = 0U; index < count; ++index) {
+            values.push_back(payload_value(bytes, index * width, width));
+        }
+
+        const bool fill = std::all_of(
+            values.begin() + 1U, values.end(),
+            [&](std::uint32_t value) { return value == values.front(); });
+        if (fill) {
+            PayloadEncodingPlan candidate;
+            candidate.commands.push_back(
+                "FILL:" + std::string(width_name(width)) + ',' +
+                text::hex(*compact, 1) + ',' +
+                text::hex(static_cast<std::uint32_t>(count), 8) + ',' +
+                scalar_value(values.front(), width) + ';');
+            candidate.runtime_records = 2U;
+            candidate.runtime_write_work = count;
+            candidate.text_length = candidate.commands.front().size();
+            if (plan_is_better(candidate, scalar) &&
+                (!best || plan_is_better(candidate, *best))) {
+                best = std::move(candidate);
+            }
+            continue;
+        }
+
+        const std::uint32_t mask = width_mask(width);
+        const std::uint32_t delta =
+            (values[1U] - values[0U]) & mask;
+        bool slide = delta != 0U;
+        for (std::size_t index = 2U; slide && index < values.size(); ++index) {
+            slide = values[index] == ((values[index - 1U] + delta) & mask);
+        }
+        if (!slide) continue;
+
+        PayloadEncodingPlan candidate;
+        candidate.commands.push_back(
+            "SLIDE:" + std::string(width_name(width)) + ',' +
+            text::hex(*compact, 1) + ',' +
+            text::hex(static_cast<std::uint32_t>(count), 8) + ',' +
+            text::hex(static_cast<std::uint32_t>(width), 8) + ',' +
+            text::hex(delta, 8) + ',' +
+            scalar_value(values.front(), width) + ';');
+        candidate.runtime_records = 4U;
+        candidate.runtime_write_work = count;
+        candidate.text_length = candidate.commands.front().size();
+        if (plan_is_better(candidate, scalar) &&
+            (!best || plan_is_better(candidate, *best))) {
+            best = std::move(candidate);
+        }
+    }
+    return best;
+}
+
 bool append_payload_writes(const Operation& operation,
                            EnhancedEncodedOption& encoded,
                            std::vector<std::string>& warnings,
                            std::string_view entry_name) {
-    std::vector<std::uint8_t> bytes = operation_payload(operation);
+    const std::vector<std::uint8_t> bytes = operation_payload(operation);
     if (bytes.empty()) {
         warnings.push_back(std::string(entry_name) +
             ": EZ-Flash Enhanced E7 write has no representable payload");
         return false;
     }
 
+    PayloadEncodingPlan scalar;
     std::size_t offset = 0U;
     while (offset < bytes.size()) {
         const std::uint32_t address = operation.address +
@@ -99,19 +220,23 @@ bool append_payload_writes(const Operation& operation,
         } else if (remaining >= 2U && aligned(address, 2U)) {
             width = 2U;
         }
-        std::uint32_t value = 0U;
-        for (std::uint8_t index = 0U; index < width; ++index) {
-            value |= static_cast<std::uint32_t>(bytes[offset + index])
-                     << (index * 8U);
-        }
+        const std::uint32_t value = payload_value(bytes, offset, width);
         const auto command = encode_scalar_write(
             address, value, width, entry_name, warnings);
         if (!command) return false;
-        encoded.commands.push_back(*command);
-        ++encoded.runtime_records;
-        ++encoded.runtime_write_work;
+        scalar.text_length += command->size();
+        scalar.commands.push_back(*command);
+        ++scalar.runtime_records;
+        ++scalar.runtime_write_work;
         offset += width;
     }
+
+    const auto compact = compact_pattern_plan(operation, bytes, scalar);
+    const PayloadEncodingPlan& selected = compact ? *compact : scalar;
+    encoded.commands.insert(encoded.commands.end(),
+                            selected.commands.begin(), selected.commands.end());
+    encoded.runtime_records += selected.runtime_records;
+    encoded.runtime_write_work += selected.runtime_write_work;
     return true;
 }
 

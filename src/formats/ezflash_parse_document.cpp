@@ -321,10 +321,17 @@ CheatDocument parse_document(std::string_view input) {
         }
     }
     for (CheatEntry& entry : document.entries) {
-        if (!entry.ezflash_group_name.empty() &&
+        const bool original_on = !entry.operations.empty() &&
+            entry.operations.front().source_text.find(':') == std::string::npos;
+        if (!entry.ezflash_group_name.empty() && original_on &&
             group_counts[group_key(entry)] == 1U &&
             entry.ezflash_option_name == "ON") {
             entry.name = entry.ezflash_group_name;
+            // Stock EZ-Flash uses [Code Name] followed by ON=.  In E7 that
+            // is a standalone CodeName=commands row, not a one-option group.
+            entry.ezflash_group_name.clear();
+            entry.ezflash_option_name.clear();
+            entry.ezflash_group_mode = EzFlashGroupMode::None;
         }
     }
     return document;

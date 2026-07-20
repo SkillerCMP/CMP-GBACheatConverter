@@ -18,7 +18,9 @@ void list_formats(std::ostream& output_stream) {
         << "  armax-encrypted\n"
         << "  xploder-raw\n"
         << "  xploder-encrypted\n"
-        << "  ez\n\n"
+        << "  ez\n"
+        << "  ezflash-original  input alias for stock ON= syntax\n"
+        << "  ezflash-enhanced  input/output alias for latest E7 syntax\n\n"
         << "Native file formats:\n"
         << "  armax-dsc       input/output\n"
         << "  vba-clt         input/output\n"
@@ -47,6 +49,8 @@ void usage(std::ostream& error_stream, std::string_view program_name) {
         << "  " << program_name
         << " --from auto --to vba-clt --output game.clt game.cht\n"
         << "  " << program_name
+        << " --from auto --to ezflash-enhanced --output enhanced.cht original.cht\n"
+        << "  " << program_name
         << " --from auto --to retroarch-cht --output retroarch.cht game.cht\n"
         << "  " << program_name
         << " --from auto --to mgba-cheats --output game.cheats game.cht\n"
@@ -72,8 +76,23 @@ Options parse_arguments(const std::vector<std::string>& arguments) {
         const std::string& argument = arguments[index];
         if (argument == "--from" && index + 1U < arguments.size()) {
             options.from = arguments[++index];
+            if (options.from == "ezflash-original" ||
+                options.from == "ez-original" ||
+                options.from == "ezflash-enhanced" ||
+                options.from == "ez-enhanced") {
+                options.from = "ez";
+            }
         } else if (argument == "--to" && index + 1U < arguments.size()) {
             options.to = arguments[++index];
+            if (options.to == "ezflash-original" ||
+                options.to == "ez-original") {
+                options.to = "ez";
+                options.ez_mode = gba::ezflash::Mode::Original;
+            } else if (options.to == "ezflash-enhanced" ||
+                       options.to == "ez-enhanced") {
+                options.to = "ez";
+                options.ez_mode = gba::ezflash::Mode::Enhanced;
+            }
         } else if (argument == "--crypt" && index + 1U < arguments.size()) {
             options.crypt_format = arguments[++index];
         } else if ((argument == "--cb-input-key" ||

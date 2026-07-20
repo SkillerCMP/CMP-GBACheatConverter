@@ -144,8 +144,11 @@ void test_ezflash_v4_physical_line_wrapping() {
     gba::ezflash::Options options;
     options.maximum_physical_line_length = 64U;
     const auto output = gba::ezflash::export_document({{entry}, {}}, options);
-    require(output.success && output.text.find("\nW32:") != std::string::npos,
-            "Enhanced option was not wrapped at command boundaries");
+    require(output.success &&
+                (output.text.find("\nW32:") != std::string::npos ||
+                 output.text.find("SLIDE:W32,1000,0000000A") !=
+                     std::string::npos),
+            "Enhanced option was neither wrapped nor safely condensed");
 }
 
 void test_ezflash_v4_section_names() {

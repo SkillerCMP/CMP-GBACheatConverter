@@ -13,7 +13,7 @@ void test_armax_encrypted_vector_decrypt() {
         gba::armax::transform_text(encrypted, true, false);
 
     const std::string expected =
-        "78914CD3 8AB26DFD\n"
+        "78914CD3 000000FD\n"
         "002239F8 00000004\n"
         "00000000 1801D418\n"
         "00002000 00000000\n";
@@ -22,6 +22,33 @@ void test_armax_encrypted_vector_decrypt() {
             "Action Replay MAX encrypted vector did not decrypt exactly");
     require(result.success,
             "Action Replay MAX static-key decrypt unexpectedly failed");
+}
+
+
+void test_armax_raw_condition_operand_canonicalization() {
+    const std::string raw =
+        "[Canonical Conditions]\n"
+        "78200010 AABBCCDD\n"
+        "7A200012 AABBCCDD\n"
+        "7C200014 AABBCCDD\n"
+        "00200020 0100007F\n"
+        "DEADFACE AABB1234\n"
+        "11223344 001DC0DE\n";
+
+    const auto result =
+        gba::armax::transform_text(raw, false, false);
+
+    const std::string expected =
+        "[Canonical Conditions]\n"
+        "78200010 000000DD\n"
+        "7A200012 0000CCDD\n"
+        "7C200014 AABBCCDD\n"
+        "00200020 0100007F\n"
+        "DEADFACE AABB1234\n"
+        "11223344 001DC0DE\n";
+
+    require(result.success && result.text == expected,
+            "AR MAX Raw formatter did not clear only unused condition operand bits");
 }
 
 void test_armax_static_roundtrip() {

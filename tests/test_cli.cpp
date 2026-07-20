@@ -6,8 +6,8 @@
 namespace gba::tests {
 
 void test_release_version() {
-    require(std::string(GBA_CHEAT_VERSION) == "2.15",
-            "Configured release version is not v2.15");
+    require(std::string(GBA_CHEAT_VERSION) == "2.17",
+            "Configured release version is not v2.17");
 }
 
 void test_embedded_cli_runner() {
@@ -19,7 +19,7 @@ void test_embedded_cli_runner() {
             {"--version"}, input, output, error,
             "GbaCheatConverter.exe");
         require(result == 0 &&
-                    output.str() == "GBA Cheat Converter v2.15\n" &&
+                    output.str() == "GBA Cheat Converter v2.17\n" &&
                     error.str().empty(),
                 "Embedded GUI CLI version mode failed");
     }
@@ -134,6 +134,22 @@ void test_cli_output_file_and_binary_console_guard() {
                 std::filesystem::exists(short_output_path),
             "CLI -o alias failed");
     std::filesystem::remove(short_output_path, ignored);
+}
+
+void test_cli_ezflash_original_to_enhanced_alias() {
+    std::istringstream input(
+        "[Infinite Health]\n"
+        "ON=2100,63,00,63,00,63,00,63,00;\n");
+    std::ostringstream output;
+    std::ostringstream error;
+    const int result = gba::cli::run(
+        {"--from", "ezflash-original", "--to", "ezflash-enhanced", "-"},
+        input, output, error, "GbaCheatConverterCLI");
+    require(result == 0 &&
+                output.str().find(
+                    "Infinite Health=FILL:W32,2100,00000002,00630063;") !=
+                    std::string::npos,
+            "CLI Original-to-Enhanced EZ-Flash aliases failed");
 }
 
 } // namespace gba::tests

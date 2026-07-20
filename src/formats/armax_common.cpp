@@ -94,6 +94,26 @@ std::uint32_t width_bits(std::uint8_t width) {
     }
 }
 
+std::uint32_t canonicalize_raw_operand(std::uint32_t op1,
+                                       std::uint32_t op2) {
+    // PAR v3/AR MAX encryption can leave arbitrary data in operand bits
+    // above the active condition width. The runtime masks those bits, so
+    // Raw output should clear them rather than expose encryption residue.
+    // Keep non-condition rows untouched because narrow direct writes, fills,
+    // pointers, and other operations use their upper operand bits as fields.
+    if (op1 == 0xDEADFACEU ||
+        op2 == 0x001DC0DEU ||
+        op1 == 0x00000000U ||
+        (op1 >> 24U) == 0xC4U ||
+        (op1 & kConditionMask) == 0U) {
+        return op2;
+    }
+
+    const std::uint8_t width = decode_width(op1);
+    const std::uint32_t mask = width_mask(width);
+    return mask == 0U ? op2 : (op2 & mask);
+}
+
 Operation make_operation(OperationKind kind,
                          const RawLine& line,
                          std::uint32_t address,

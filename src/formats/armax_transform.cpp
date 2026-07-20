@@ -41,6 +41,10 @@ Result transform_text_impl(std::string_view input,
             op2 = converted.second;
         }
 
+        if (!output_encrypted) {
+            op2 = canonicalize_raw_operand(op1, op2);
+        }
+
         output << format_line(op1, op2, output_encrypted, output_key);
         if (index + 1U < lines.size()) {
             output << '\n';

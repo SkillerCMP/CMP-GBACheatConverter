@@ -5,10 +5,10 @@ cmake_minimum_required(VERSION 3.20)
 # cannot race while regenerating configured version resources.
 set(CMAKE_SUPPRESS_REGENERATION ON)
 
-project(GbaCheatConverter VERSION 2.15.0 LANGUAGES CXX)
+project(GbaCheatConverter VERSION 2.17.0 LANGUAGES CXX)
 
-set(GBA_DISPLAY_VERSION "2.15")
-set(GBA_FILE_VERSION "2.15.0.0")
+set(GBA_DISPLAY_VERSION "2.17")
+set(GBA_FILE_VERSION "2.17.0.0")
 if(PROJECT_VERSION_TWEAK STREQUAL "")
     set(GBA_VERSION_TWEAK 0)
 else()
@@ -237,12 +237,12 @@ add_test(NAME gba-cheat-tests COMMAND gba-cheat-tests)
 add_test(NAME gba-cheat-cli-version
          COMMAND gba-cheat-converter-cli --version)
 set_tests_properties(gba-cheat-cli-version PROPERTIES
-    PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.15"
+    PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.17"
 )
 if(WIN32)
     add_test(NAME gba-cheat-unified-cli-version
              COMMAND GbaCheatConverter --version)
     set_tests_properties(gba-cheat-unified-cli-version PROPERTIES
-        PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.15"
+        PASS_REGULAR_EXPRESSION "GBA Cheat Converter v2.17"
     )
 endif()

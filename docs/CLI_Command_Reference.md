@@ -1,4 +1,4 @@
-# GBA Cheat Converter v2.15 — CLI Command Reference
+# GBA Cheat Converter v2.17 — CLI Command Reference
 
 ## Executables
 
@@ -12,7 +12,7 @@
 GbaCheatConverterCLI.exe --from INPUT_FORMAT --to OUTPUT_FORMAT [OPTIONS] --output OUTPUT_FILE INPUT_FILE
 ```
 
-The preferred v2.15 form writes directly to a file:
+The preferred v2.17 form writes directly to a file:
 
 ```bat
 GbaCheatConverterCLI.exe --from auto --to vba-clt --output "Game.clt" "Game.cht"
@@ -101,7 +101,7 @@ mister-gg
 mister-zip
 ```
 
-When binary output would otherwise be printed directly to an interactive Windows console, v2.15 stops with a readable error and asks for `--output FILE` or `> FILE`.
+When binary output would otherwise be printed directly to an interactive Windows console, v2.17 stops with a readable error and asks for `--output FILE` or `> FILE`.
 
 Do not combine standard error with binary standard output using `2>&1`.
 
@@ -148,3 +148,11 @@ GbaCheatConverterCLI.exe --from auto --to vba-clt --output "Game.clt" "Game.cht"
 - `0` — success
 - `1` — conversion, detection, argument, file, or export error
 - `2` — usage error or attempted binary output to an interactive console
+
+## EZ-Flash Original to Enhanced E7
+
+```bat
+GbaCheatConverterCLI.exe --from ezflash-original --to ezflash-enhanced --output "Enhanced.cht" "Original.cht"
+```
+
+`--from auto` may be used instead. The migration condenses adjacent writes only when the E7 form is exact.

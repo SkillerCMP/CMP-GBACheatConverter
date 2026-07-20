@@ -70,4 +70,6 @@ The converter uses these compatibility outcomes:
 | Unsupported | The destination cannot safely represent the operation; no uncontrolled writes are emitted. |
 | Native-only preservation | Emulator-specific fields are retained for lossless same-format re-export but are not guessed into a device-code family. |
 
-The v2.15 regression matrix retains verification of a direct 8-bit RAM write through AR MAX `.dsc`, VBA-M `.clt`, My Boy! `.cht`, RetroArch `.cht`, mGBA `.cheats`, Mednafen `.cht`, raw MiSTer `.gg`, MiSTer ZIP, and EZ-Flash `.cht`. Complex operations continue to use the per-format rules above.
+The v2.17 regression matrix retains verification of a direct 8-bit RAM write through AR MAX `.dsc`, VBA-M `.clt`, My Boy! `.cht`, RetroArch `.cht`, mGBA `.cheats`, Mednafen `.cht`, raw MiSTer `.gg`, MiSTer ZIP, and EZ-Flash `.cht`. Complex operations continue to use the per-format rules above.
+
+- EZ-Flash migration is intentionally one-way: Original `ON=` input can become current Enhanced E7; GUI Original mode preserves EZ-Flash input unchanged.
