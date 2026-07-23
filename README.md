@@ -13,6 +13,15 @@
   &nbsp;•&nbsp;
   <code>GPL-3.0-only</code>
 </p>
+<p align="center">
+  <a href="https://github.com/SkillerCMP/CMP-GBACheatConverter/releases">
+    <img alt="GitHub Downloads — All Releases" src="https://img.shields.io/github/downloads/SkillerCMP/CMP-GBACheatConverter/total?style=social">
+  </a>
+  <a href="https://github.com/SkillerCMP/CMP-GBACheatConverter/releases/latest">
+    <img alt="GitHub Downloads — Latest Release" src="https://img.shields.io/github/downloads/SkillerCMP/CMP-GBACheatConverter/latest/total?style=social">
+  </a>  
+</p>
+
 
 ---
 
